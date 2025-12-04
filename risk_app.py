@@ -131,7 +131,16 @@ with col4:
             placeholder="Enter medication name and dosage"
         )
 
-adult_present = st.radio("Adult present during provider shift?", ["No", "Yes"], index=1, horizontal=True)
+# Adult present question with conditional input boxes for names
+col5, col6 = st.columns([2,3])
+with col5:
+    adult_present = st.radio("Adult present during provider shift?", ["No", "Yes"], index=1, horizontal=True)
+with col6:
+    adult1 = adult2 = ""
+    if adult_present == "Yes":
+        adult1 = st.text_input("Adult 1 Name", placeholder="Enter first adult's name")
+        adult2 = st.text_input("Adult 2 Name", placeholder="Enter second adult's name")
+
 mobility = st.selectbox("Mobility score (1 = best, 5 = worst)", list(range(1,6)), index=2)
 st.markdown("</div>", unsafe_allow_html=True)
 
@@ -197,6 +206,7 @@ summary_html = f"""
 <tr><td>Medication Reason</td><td>{med_reason if med_reason else ''}</td></tr>
 <tr><td>Medication Details</td><td>{med_details if med_details else ''}</td></tr>
 <tr><td>Adult Present</td><td>{adult_present}</td></tr>
+<tr><td>Adult Names</td><td>{adult1 if adult1 else ''} {adult2 if adult2 else ''}</td></tr>
 <tr><td>Mobility</td><td>{mobility}</td></tr>
 <tr><td>Risk Score</td><td>{round(score,1)}</td></tr>
 <tr><td>Risk Level</td><td>{level}</td></tr>
