@@ -6,13 +6,14 @@ st.set_page_config(page_title="Home Care Risk Assessment", layout="wide")
 st.title("Home Care Client Risk Assessment")
 
 # Input fields
-age = st.selectbox("Age", list(range(18, 101)), index=50, help="Select the client’s age")
-height = st.selectbox("Height (inches)", list(range(50, 85)), index=65, help="Select the client’s height in inches")
-weight = st.selectbox("Weight (lbs)", list(range(80, 301)), index=140, help="Select the client’s weight in pounds")
+age = st.selectbox("Age", list(range(18, 101)), index=32, help="Select the client’s age")
+height_values = list(range(50, 85))
+height = st.selectbox("Height (inches)", height_values, index=18, help="Select the client’s height in inches")
+weight = st.selectbox("Weight (lbs)", list(range(80, 301)), index=60, help="Select the client’s weight in pounds")
 seizures = st.selectbox("Seizures", ["No", "Yes"])
 medications = st.selectbox("Medications", ["No", "Yes"])
 adult_present = st.selectbox("Adult present during provider shift", ["No", "Yes"])
-mobility = st.selectbox("Mobility score (1=low, 10=high)", list(range(1, 11)), index=5)
+mobility = st.selectbox("Mobility score (1=low, 10=high)", list(range(1, 11)), index=4)
 
 # New text area for extra medical information
 additional_info = st.text_area(
