@@ -53,10 +53,16 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# --- Client ID Card ---
+# --- Client Info Card ---
 st.markdown("<div class='card'>", unsafe_allow_html=True)
-st.markdown("<div class='section-title'>Client Identification</div>", unsafe_allow_html=True)
+st.markdown("<div class='section-title'>Client Information</div>", unsafe_allow_html=True)
+
+# Client Name
+client_name = st.text_input("Client Name", placeholder="Enter client's full name")
+
+# Client ID
 client_id = st.text_input("Client ID / Number", placeholder="Enter unique client ID")
+
 st.markdown("</div>", unsafe_allow_html=True)
 
 # --- Client Demographics Card ---
@@ -162,6 +168,7 @@ st.markdown("<div class='card'>", unsafe_allow_html=True)
 st.markdown("<div class='section-title'>Client Summary</div>", unsafe_allow_html=True)
 
 data = {
+    "ClientName": client_name,
     "ClientID": client_id,
     "Age": age,
     "Height": height,
