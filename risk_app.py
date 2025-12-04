@@ -39,6 +39,18 @@ st.markdown("""
 .high { background:#e53e3e; }
 .medium { background:#dd6b20; }
 .low { background:#10b981; }
+table, th, td {
+    border: 1px solid #ddd;
+}
+th, td {
+    padding: 8px;
+    vertical-align: top;
+    word-wrap: break-word;
+}
+th {
+    background-color: #f2f2f2;
+    text-align: left;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -163,30 +175,36 @@ with col2:
     st.metric("Risk Score", f"{score:.1f}")
 st.markdown("</div>", unsafe_allow_html=True)
 
-# --- Client Summary Table ---
+# --- Client Summary Card with wrapped text ---
 st.markdown("<div class='card'>", unsafe_allow_html=True)
 st.markdown("<div class='section-title'>Client Summary</div>", unsafe_allow_html=True)
 
-data = {
-    "ClientName": client_name,
-    "ClientID": client_id,
-    "Age": age,
-    "Height": height,
-    "Weight": weight,
-    "Seizures": has_seizures,
-    "SeizureType": seizure_type if seizure_type else "",
-    "Medication": medications,
-    "MedReason": med_reason if med_reason else "",
-    "MedDetails": med_details if med_details else "",
-    "AdultPresent": adult_present,
-    "Mobility": mobility,
-    "RiskScore": round(score,1),
-    "RiskLevel": level,
-    "Notes": additional_info if additional_info else ""
-}
+# Build HTML table for better wrapping
+summary_html = f"""
+<table style='width:100%; border-collapse: collapse;'>
+<tr style='background-color:#f2f2f2;'>
+    <th>Field</th>
+    <th>Answer</th>
+</tr>
+<tr><td>Client Name</td><td>{client_name}</td></tr>
+<tr><td>Client ID</td><td>{client_id}</td></tr>
+<tr><td>Age</td><td>{age}</td></tr>
+<tr><td>Height</td><td>{height}</td></tr>
+<tr><td>Weight</td><td>{weight}</td></tr>
+<tr><td>Seizures</td><td>{has_seizures}</td></tr>
+<tr><td>Seizure Type</td><td>{seizure_type if seizure_type else ''}</td></tr>
+<tr><td>Medication</td><td>{medications}</td></tr>
+<tr><td>Medication Reason</td><td>{med_reason if med_reason else ''}</td></tr>
+<tr><td>Medication Details</td><td>{med_details if med_details else ''}</td></tr>
+<tr><td>Adult Present</td><td>{adult_present}</td></tr>
+<tr><td>Mobility</td><td>{mobility}</td></tr>
+<tr><td>Risk Score</td><td>{round(score,1)}</td></tr>
+<tr><td>Risk Level</td><td>{level}</td></tr>
+<tr><td>Additional Notes</td><td>{additional_info if additional_info else ''}</td></tr>
+</table>
+"""
 
-df = pd.DataFrame([data])
-st.dataframe(df, width=1000, height=200)
+st.markdown(summary_html, unsafe_allow_html=True)
 st.markdown("</div>", unsafe_allow_html=True)
 
 # --- Footer ---
