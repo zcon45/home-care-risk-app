@@ -7,9 +7,9 @@ st.title("🏥 Home Care Risk Assessment")
 st.markdown("Fill in the client details below to calculate the risk score.")
 
 # --- Dropdown options ---
-age_options = list(range(18, 101))      # 18–100
-weight_options = list(range(80, 301))   # 80–300 lbs
-height_options = list(range(50, 85))    # 50–84 inches
+age_options = list(range(1, 110))      # 18–100
+weight_options = list(range(10, 400))   # 80–300 lbs
+height_options = list(range(6, 100))    # 50–84 inches
 mobility_options = list(range(1, 6))    # 1–5
 
 # --- Client Demographics in columns ---
@@ -80,3 +80,4 @@ df = pd.DataFrame(client_data)
 
 # Use st.dataframe for better formatting and horizontal scrolling
 st.dataframe(df, width=900)
+
