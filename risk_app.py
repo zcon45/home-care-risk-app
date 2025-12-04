@@ -8,23 +8,12 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# --- Custom CSS for modern look ---
+# --- Custom CSS for cards and typography ---
 st.markdown("""
 <style>
-:root {
-    --bg: #e6f7fb;         /* light blue */
-    --card: #ffffff;
-    --accent: #3fb3ae;
-    --muted: #4a5568;
-    --rounded: 12px;
-}
-body, .reportview-container, .main {
-    background-color: var(--bg);
-    font-family: 'Segoe UI', sans-serif;
-}
 .card {
-    background: var(--card);
-    border-radius: var(--rounded);
+    background-color: #ffffff;
+    border-radius: 12px;
     padding: 20px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.05);
     margin-bottom: 20px;
@@ -36,7 +25,7 @@ body, .reportview-container, .main {
     margin-bottom: 10px;
 }
 .muted {
-    color: var(--muted);
+    color: #4a5568;
     font-size: 14px;
     margin-bottom: 15px;
 }
