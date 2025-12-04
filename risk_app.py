@@ -53,6 +53,12 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+# --- Client ID Card ---
+st.markdown("<div class='card'>", unsafe_allow_html=True)
+st.markdown("<div class='section-title'>Client Identification</div>", unsafe_allow_html=True)
+client_id = st.text_input("Client ID / Number", placeholder="Enter unique client ID")
+st.markdown("</div>", unsafe_allow_html=True)
+
 # --- Client Demographics Card ---
 st.markdown("<div class='card'>", unsafe_allow_html=True)
 st.markdown("<div class='section-title'>Client Demographics</div>", unsafe_allow_html=True)
@@ -64,37 +70,51 @@ heights = list(range(50, 85))
 age = st.selectbox("Age", ages, index=ages.index(70))
 weight = st.selectbox("Weight (lbs)", weights, index=weights.index(150))
 height = st.selectbox("Height (inches)", heights, index=heights.index(65))
-
 st.markdown("</div>", unsafe_allow_html=True)
 
 # --- Medical & Care Info Card ---
 st.markdown("<div class='card'>", unsafe_allow_html=True)
 st.markdown("<div class='section-title'>Medical & Care Information</div>", unsafe_allow_html=True)
 
-col1, col2 = st.columns(2)
+# Columns for Seizures + Seizure type
+col1, col2 = st.columns([2,3])
 with col1:
     has_seizures = st.radio("History of Seizures?", ["No", "Yes"], index=0, horizontal=True)
 with col2:
+    seizure_type = None
+    if has_seizures == "Yes":
+        seizure_type = st.selectbox(
+            "Seizure Type",
+            options=[
+                "Generalized — Tonic-clonic",
+                "Generalized — Atonic (drop attacks)",
+                "Generalized — Tonic only",
+                "Generalized — Clonic / Myoclonic",
+                "Focal (aware or impaired awareness)",
+                "Generalized — Absence"
+            ],
+            help="Select seizure type for risk scoring"
+        )
+
+# Columns for Medication + Reason + Dosage
+col3, col4 = st.columns([1.5,2])
+with col3:
     medications = st.radio("Medication?", ["No", "Yes"], index=0, horizontal=True)
+with col4:
+    med_reason = None
+    med_details = ""
+    if medications == "Yes":
+        med_reason = st.selectbox(
+            "Medication Reason",
+            options=["ADHD", "Heart", "Blood Pressure", "Seizure Medications", "Diabetes", "Other"]
+        )
+        med_details = st.text_input(
+            "Medication Details (name and dosage, e.g., 10mg per day)",
+            placeholder="Enter medication name and dosage"
+        )
 
 adult_present = st.radio("Adult present during provider shift?", ["No", "Yes"], index=1, horizontal=True)
-mobility = st.selectbox("Mobility score (1 = best, 5 = worst)", list(range(1, 6)), index=2)
-
-# --- Seizure type dropdown if seizures exist ---
-seizure_type = None
-if has_seizures == "Yes":
-    seizure_type = st.selectbox(
-        "Seizure Type (if applicable)",
-        options=[
-            "Generalized — Tonic-clonic",
-            "Generalized — Atonic (drop attacks)",
-            "Generalized — Tonic only",
-            "Generalized — Clonic / Myoclonic",
-            "Focal (aware or impaired awareness)",
-            "Generalized — Absence"
-        ],
-        help="Select the seizure type for more precise risk scoring."
-    )
+mobility = st.selectbox("Mobility score (1 = best, 5 = worst)", list(range(1,6)), index=2)
 st.markdown("</div>", unsafe_allow_html=True)
 
 # --- Additional Notes Card ---
@@ -142,12 +162,15 @@ st.markdown("<div class='card'>", unsafe_allow_html=True)
 st.markdown("<div class='section-title'>Client Summary</div>", unsafe_allow_html=True)
 
 data = {
+    "ClientID": client_id,
     "Age": age,
     "Height": height,
     "Weight": weight,
     "Seizures": has_seizures,
     "SeizureType": seizure_type if seizure_type else "",
     "Medication": medications,
+    "MedReason": med_reason if med_reason else "",
+    "MedDetails": med_details if med_details else "",
     "AdultPresent": adult_present,
     "Mobility": mobility,
     "RiskScore": round(score,1),
@@ -156,7 +179,7 @@ data = {
 }
 
 df = pd.DataFrame([data])
-st.dataframe(df, width=900, height=200)
+st.dataframe(df, width=1000, height=200)
 st.markdown("</div>", unsafe_allow_html=True)
 
 # --- Footer ---
