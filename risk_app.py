@@ -49,8 +49,8 @@ body{ background:#f4fbfd; }
     margin-top:8px;
 }
 
-input[type=number]::-webkit-inner-spin-button,
-input[type=number]::-webkit-outer-spin-button{
+input[type=number]::-webkit-inner-spin_button,
+input[type=number]::-webkit-outer-spin_button{
     -webkit-appearance:none;
     margin:0;
 }
@@ -73,8 +73,9 @@ if "industry" not in st.session_state:
 if "assessment" not in st.session_state:
     st.session_state.assessment = None
 
+# Home care assessment state
 if "step" not in st.session_state:
-    st.session_state.step = 1   # for Home Care assessment
+    st.session_state.step = 1
 
 if "med_list" not in st.session_state:
     st.session_state.med_list = []
@@ -148,14 +149,14 @@ def reset_all():
     st.session_state.biz_answers = {}
 
 # ---------------------------------------------------
-# BUSINESS "AI-STYLE" ASSESSMENT GENERATION
+# BUSINESS "AI-STYLE" ASSESSMENT GENERATOR
 # ---------------------------------------------------
 
 def generate_business_assessment_structure(description, sector, counterpart):
     """
     Simple rule-based generator that creates a structured
     business risk assessment from the user's description.
-    In the future this can be swapped for a real AI model.
+    This is written so you can later swap in a real AI model.
     """
     base_sections = []
 
@@ -350,17 +351,20 @@ def run_business_risk_assessment():
         st.markdown("<div class='card'>", unsafe_allow_html=True)
 
         data.biz_name = st.text_input("Business name", value=data.get("biz_name",""))
-        sectors = ["Fashion / Apparel","Manufacturing","Technology / Software","Retail / E-commerce","Logistics / Transport","Other"]
+        sectors = ["Fashion / Apparel","Manufacturing","Technology / Software","Retail / E-commerce",
+                   "Logistics / Transport","Other"]
         data.biz_sector = st.selectbox(
             "Primary sector",
             sectors,
-            index= sectors.index(data.get("biz_sector","Fashion / Apparel")) if data.get("biz_sector") in sectors else 0
+            index= sectors.index(data.get("biz_sector","Fashion / Apparel"))
+            if data.get("biz_sector") in sectors else 0
         )
         counterparts = ["Supplier","Customer","Partner","Investor","Other"]
         data.biz_counterpart = st.selectbox(
             "Counterparty type",
             counterparts,
-            index= counterparts.index(data.get("biz_counterpart","Supplier")) if data.get("biz_counterpart") in counterparts else 0
+            index= counterparts.index(data.get("biz_counterpart","Supplier"))
+            if data.get("biz_counterpart") in counterparts else 0
         )
         data.biz_scenario = st.text_area(
             "Briefly describe the situation or deal you want to assess",
@@ -381,7 +385,7 @@ def run_business_risk_assessment():
                     data.biz_counterpart
                 )
                 data.biz_step = 2
-                st.experimental_rerun()
+                st.rerun()
 
         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -416,19 +420,18 @@ def run_business_risk_assessment():
                     val = st.text_input(q["text"], value=default_val, key=f"biz_{qid}")
                 answers[qid] = val
                 st.write("")
-
             st.markdown("---")
 
         colA,colB = st.columns(2)
         with colA:
             if st.button("← Back", key="biz_back2"):
                 data.biz_step = 1
-                st.experimental_rerun()
+                st.rerun()
         with colB:
             if st.button("Calculate Risk →", key="biz_next2"):
                 data.biz_answers = answers
                 data.biz_step = 3
-                st.experimental_rerun()
+                st.rerun()
 
         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -491,11 +494,11 @@ def run_business_risk_assessment():
         with colA:
             if st.button("← Back", key="biz_back3"):
                 data.biz_step = 2
-                st.experimental_rerun()
+                st.rerun()
         with colB:
             if st.button("Start Over", key="biz_reset"):
                 reset_all()
-                st.experimental_rerun()
+                st.rerun()
 
         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -619,7 +622,7 @@ def run_home_care_risk_assessment():
                     st.session_state.new_med_name = ""
                     st.session_state.new_med_dose = ""
                     st.session_state.new_med_freq = ""
-                    st.experimental_rerun()
+                    st.rerun()
 
             st.markdown("### Current Medications")
             if not data.med_list:
@@ -649,7 +652,7 @@ def run_home_care_risk_assessment():
 
                     if cols[3].button("🗑️", key=f"del_med_{i}"):
                         data.med_list.pop(i)
-                        st.experimental_rerun()
+                        st.rerun()
 
             meds_ok = True if data.med_list else False
         else:
@@ -821,7 +824,6 @@ if data.app_stage == "industry_select":
         ("Business", "🏢"),
     ]
 
-    # arrange into rows
     rows = [industries[:3], industries[3:6], industries[6:]]
     for row in rows:
         if not row:
