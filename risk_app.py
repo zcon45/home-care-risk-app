@@ -5,7 +5,7 @@ import streamlit as st
 # -----------------------------
 st.set_page_config(
     page_title="Home Care Comfort",
-    layout="centered"
+    layout="centered",
 )
 
 # -----------------------------
@@ -13,6 +13,7 @@ st.set_page_config(
 # -----------------------------
 st.markdown("""
 <style>
+body { background-color:#f4fbfd; }
 .card {
     background:#ffffff;
     padding:20px;
@@ -20,8 +21,14 @@ st.markdown("""
     box-shadow:0px 4px 10px rgba(0,0,0,.05);
     margin-bottom:20px;
 }
-.section-title { font-size:20px; font-weight:600; }
-.helper { color:#6b7280; font-size:13px; }
+.section-title {
+    font-size:20px;
+    font-weight:600;
+}
+.helper {
+    color:#6b7280;
+    font-size:13px;
+}
 .badge {
     padding:7px 16px;
     border-radius:999px;
@@ -31,6 +38,11 @@ st.markdown("""
 .high { background:#e53e3e; }
 .medium { background:#dd6b20; }
 .low { background:#10b981; }
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -52,14 +64,14 @@ steps = {
 }
 
 # -----------------------------
-# Progress Indicators
+# Header
 # -----------------------------
 st.markdown(f"### Step {data.step} of {len(steps)} — {steps[data.step]}")
 st.progress(data.step / len(steps))
 
-# =================================================
-# STEP 1 — CLIENT INFORMATION
-# =================================================
+# =======================================================
+# STEP 1 — CLIENT INFO (NAME REQUIRED)
+# =======================================================
 if data.step == 1:
     st.markdown("<div class='card'>", unsafe_allow_html=True)
 
@@ -68,63 +80,66 @@ if data.step == 1:
 
     if st.button("Next →"):
         if not data.name.strip():
-            st.warning("You must enter the client's name to continue.")
+            st.warning("Client name must be entered to continue.")
         else:
-            data.step += 1
+            data.step = 2
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-# =================================================
+# =======================================================
 # STEP 2 — DEMOGRAPHICS
-# =================================================
+# =======================================================
 elif data.step == 2:
     st.markdown("<div class='card'>", unsafe_allow_html=True)
 
-    data.age = st.number_input("Age", min_value=0, max_value=120)
-    data.weight = st.number_input("Weight (lbs)", min_value=1)
+    data.age = st.text_input("Age")
+    data.weight = st.text_input("Weight (lbs)")
 
     st.markdown("### Height")
-    st.caption("Enter inches OR feet + inches")
 
-    col1, col2 = st.columns(2)
+    col1,col2 = st.columns(2)
     with col1:
-        data.height_inches = st.number_input("Total inches", min_value=0)
+        data.height_feet = st.text_input("Feet")
     with col2:
-        data.height_feet = st.number_input("Feet", min_value=0)
-        data.height_extra_inches = st.number_input("Inches", min_value=0, max_value=11)
+        data.height_inches = st.text_input("Inches")
 
-    left,right = st.columns(2)
-    with left:
+    back, next = st.columns(2)
+
+    with back:
         if st.button("← Back"):
-            data.step -= 1
-    with right:
+            data.step = 1
+
+    with next:
         if st.button("Next →"):
-            height_valid = (
-                data.height_inches > 0
-                or (data.height_feet > 0 or data.height_extra_inches > 0)
-            )
+            try:
+                age = int(data.age)
+                weight = float(data.weight)
+                feet = int(data.height_feet)
+                inches = int(data.height_inches)
 
-            if not data.age or not data.weight or not height_valid:
-                st.warning("Age, weight, and height must be completed to continue.")
-            else:
-                if data.height_inches > 0:
-                    data.height = data.height_inches
+                if age <= 0 or weight <= 0:
+                    st.warning("Age and weight must be valid positive numbers.")
+                elif feet < 0 or inches < 0 or inches > 11:
+                    st.warning("Height must be valid (0–11 inches).")
                 else:
-                    data.height = data.height_feet * 12 + data.height_extra_inches
+                    data.height = feet * 12 + inches
+                    data.step = 3
 
-                data.step += 1
+            except:
+                st.warning("Please enter all demographic fields before continuing.")
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-# =================================================
+# =======================================================
 # STEP 3 — MEDICAL HISTORY
-# =================================================
+# =======================================================
 elif data.step == 3:
     st.markdown("<div class='card'>", unsafe_allow_html=True)
 
-    data.seizures = st.radio("History of seizures?", ["No","Yes"], horizontal=True)
+    data.seizures = st.radio("History of seizures?", ["No", "Yes"], horizontal=True)
 
     data.seizure_type = ""
+
     if data.seizures == "Yes":
         data.seizure_type = st.selectbox(
             "Seizure type",
@@ -134,30 +149,32 @@ elif data.step == 3:
                 "Generalized — Tonic only",
                 "Clonic / Myoclonic",
                 "Focal",
-                "Absence"
+                "Absence",
             ]
         )
 
-    left,right = st.columns(2)
-    with left:
+    back, next = st.columns(2)
+
+    with back:
         if st.button("← Back"):
-            data.step -= 1
-    with right:
+            data.step = 2
+
+    with next:
         if st.button("Next →"):
-            if data.seizures=="Yes" and not data.seizure_type:
-                st.warning("You must select a seizure type.")
+            if data.seizures == "Yes" and not data.seizure_type:
+                st.warning("You must select a seizure type to continue.")
             else:
-                data.step += 1
+                data.step = 4
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-# =================================================
+# =======================================================
 # STEP 4 — MEDICATIONS
-# =================================================
+# =======================================================
 elif data.step == 4:
     st.markdown("<div class='card'>", unsafe_allow_html=True)
 
-    data.medications = st.radio("Does the client take medication?", ["No","Yes"], horizontal=True)
+    data.medications = st.radio("Does the client take medication?",["No","Yes"], horizontal=True)
 
     data.med_reason = ""
     data.med_details = ""
@@ -167,65 +184,69 @@ elif data.step == 4:
             "Medication reason",
             ["ADHD","Heart","Blood Pressure","Seizure Medications","Diabetes","Other"]
         )
-        data.med_details = st.text_input(
-            "Medication & dosage",
-            placeholder="Example: Keppra 500mg twice daily"
-        )
+        data.med_details = st.text_input("Medication & dosage")
 
-    left,right = st.columns(2)
-    with left:
+    back,next = st.columns(2)
+
+    with back:
         if st.button("← Back"):
-            data.step -= 1
-    with right:
+            data.step = 3
+
+    with next:
         if st.button("Next →"):
-            data.step += 1
+            data.step = 5
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-# =================================================
+# =======================================================
 # STEP 5 — MOBILITY & SAFETY
-# =================================================
+# =======================================================
 elif data.step == 5:
     st.markdown("<div class='card'>", unsafe_allow_html=True)
 
-    mobility_options = {
-        "Walks independently with no assistance":1,
-        "Needs occasional help or supervision":2,
-        "Uses walker, cane, or brace":3,
-        "Requires full hands-on assistance":4,
-        "Non-mobile or bedridden":5
+    mobility_map = {
+        "Walks independently (no assistance needed)":1,
+        "Needs occasional supervision or help":2,
+        "Uses mobility aid (walker/cane/brace)":3,
+        "Requires hands-on assistance":4,
+        "Non-mobile / bedridden":5
     }
 
-    mobility_text = st.selectbox("Client mobility", list(mobility_options.keys()))
-    data.mobility = mobility_options[mobility_text]
+    mobility_choice = st.selectbox("Mobility level", list(mobility_map.keys()))
+    data.mobility = mobility_map[mobility_choice]
 
     data.adult_present = st.radio("Will an adult be present during care?",["No","Yes"], horizontal=True)
 
-    data.adult1 = data.adult2 = ""
+    data.adult1 = ""
+    data.adult2 = ""
+
     if data.adult_present=="Yes":
-        data.adult1 = st.text_input("Adult 1 name")
-        data.adult2 = st.text_input("Adult 2 name")
+        data.adult1 = st.text_input("Adult #1 Name")
+        data.adult2 = st.text_input("Adult #2 Name")
 
     data.notes = st.text_area("Additional medical notes")
 
-    left,right = st.columns(2)
-    with left:
+    back,next = st.columns(2)
+
+    with back:
         if st.button("← Back"):
-            data.step -= 1
-    with right:
+            data.step = 4
+
+    with next:
         if st.button("Next →"):
-            data.step += 1
+            data.step = 6
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-# =================================================
-# STEP 6 — REVIEW & SCORE
-# =================================================
+# =======================================================
+# STEP 6 — REVIEW & SCORING
+# =======================================================
 elif data.step == 6:
 
     score = 0
-    score += data.age * 0.2
-    score += data.weight * 0.05
+
+    score += float(data.age) * 0.2
+    score += float(data.weight) * 0.05
     score += data.height * 0.05
     score += data.mobility * 5
 
@@ -249,26 +270,27 @@ elif data.step == 6:
         score -= 5
 
     if score > 70:
-        level,cls,msg = "High Risk","high","Close monitoring recommended."
+        level, cls, msg = "High Risk","high","Close monitoring and supervision recommended."
     elif score > 45:
-        level,cls,msg = "Medium Risk","medium","Moderate supervision recommended."
+        level, cls, msg = "Medium Risk","medium","Moderate oversight appropriate."
     else:
-        level,cls,msg = "Low Risk","low","Appropriate for standard care."
+        level, cls, msg = "Low Risk","low","Appropriate for standard home care services."
 
     st.markdown("<div class='card'>", unsafe_allow_html=True)
 
     st.markdown(f"<span class='badge {cls}'>{level}</span>", unsafe_allow_html=True)
-    st.metric("Risk Score",round(score,1))
+    st.metric("Risk Score", round(score,1))
     st.write(msg)
 
     st.subheader("Client Summary")
 
-    for k,v in data.items():
-        if k not in ["step","height_inches","height_feet","height_extra_inches"]:
-            st.markdown(f"**{k.replace('_',' ').title()}**: {v}")
+    for key,val in data.items():
+        if key not in ["step"]:
+            st.markdown(f"**{key.replace('_',' ').title()}**: {val}")
 
     if st.button("Start Over"):
         data.clear()
         st.session_state.step = 1
 
     st.markdown("</div>", unsafe_allow_html=True)
+
