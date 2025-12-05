@@ -1,262 +1,271 @@
 import streamlit as st
-import pandas as pd
-import os
-from openai import OpenAI
 
-# --- Initialize OpenAI client ---
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-# --- Page config ---
+# -------------------------------------
+# Page Setup
+# -------------------------------------
 st.set_page_config(
     page_title="Home Care Comfort",
-    layout="centered",
-    initial_sidebar_state="collapsed",
+    layout="centered"
 )
 
-# --- CSS styling ---
+# -------------------------------------
+# Styling
+# -------------------------------------
 st.markdown("""
 <style>
+body { background-color:#f4fbfd; }
 .card {
-    background-color: #ffffff;
-    border-radius: 12px;
-    padding: 20px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-    margin-bottom: 20px;
+    background:#fff;
+    padding:20px;
+    border-radius:12px;
+    box-shadow:0 4px 12px rgba(0,0,0,0.05);
+    margin-bottom:20px;
 }
 .section-title {
-    font-size: 20px;
-    font-weight: 600;
-    color: #0f1724;
-    margin-bottom: 10px;
+    font-size:20px;
+    font-weight:600;
 }
-.muted {
-    color: #4a5568;
-    font-size: 14px;
+.helper {
+    color:#6b7280;
+    font-size:13px;
 }
 .badge {
-    display:inline-block;
-    padding: 6px 14px;
-    border-radius: 999px;
+    padding:7px 14px;
+    border-radius:999px;
     color:white;
-    font-weight:700;
+    font-weight:600;
 }
 .high { background:#e53e3e; }
 .medium { background:#dd6b20; }
 .low { background:#10b981; }
-
-table, th, td {
-    border: 1px solid #ddd;
-}
-th, td {
-    padding: 8px;
-    word-wrap: break-word;
-}
-th {
-    background-color: #f2f2f2;
+progress {
+    width:100%;
+    height:20px;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# --- Header ---
-st.markdown("""
-<div style='display:flex; align-items:center; gap:12px;'>
-  <div style='font-size:32px'>🏡</div>
-  <div>
-    <h1 style='margin:0;'>Home Care Comfort</h1>
-    <div class='muted'>Friendly AI-assisted home care risk assessment</div>
-  </div>
-</div>
-""", unsafe_allow_html=True)
+# -------------------------------------
+# Session State Setup
+# -------------------------------------
+if "step" not in st.session_state:
+    st.session_state.step = 1
 
-# --- Client Info ---
-st.markdown("<div class='card'>", unsafe_allow_html=True)
-st.markdown("<div class='section-title'>Client Information</div>", unsafe_allow_html=True)
+# -------------------------------------
+# Progress UI
+# -------------------------------------
+steps = {
+    1:"Client Info",
+    2:"Demographics",
+    3:"Medical",
+    4:"Medications",
+    5:"Safety",
+    6:"Review"
+}
 
-client_name = st.text_input("Client Name")
-client_id = st.text_input("Client ID / Number")
+st.markdown(
+    f"### Step {st.session_state.step} of {len(steps)} — {steps[st.session_state.step]}"
+)
 
-st.markdown("</div>", unsafe_allow_html=True)
+st.progress(st.session_state.step/len(steps))
 
-# --- Demographics ---
-st.markdown("<div class='card'>", unsafe_allow_html=True)
-st.markdown("<div class='section-title'>Client Demographics</div>", unsafe_allow_html=True)
+# -------------------------------------
+# Data Storage
+# -------------------------------------
+data = st.session_state
 
-ages = list(range(18, 101))
-weights = list(range(80, 301))
-heights = list(range(50, 85))
+# -------------------------------------
+# STEP 1 — Client info
+# -------------------------------------
+if st.session_state.step == 1:
+    st.markdown("<div class='card'>", unsafe_allow_html=True)
 
-age = st.selectbox("Age", ages)
-weight = st.selectbox("Weight (lbs)", weights)
-height = st.selectbox("Height (inches)", heights)
+    data.name = st.text_input("Client Name")
+    data.client_id = st.text_input("Client ID Number")
 
-st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("<p class='helper'>This helps us keep records organized.</p>", unsafe_allow_html=True)
 
-# --- Medical info ---
-st.markdown("<div class='card'>", unsafe_allow_html=True)
-st.markdown("<div class='section-title'>Medical & Care Information</div>", unsafe_allow_html=True)
+    if st.button("Next →"):
+        st.session_state.step += 1
 
-col1, col2 = st.columns([2,3])
+    st.markdown("</div>", unsafe_allow_html=True)
 
-with col1:
-    has_seizures = st.radio("History of Seizures?", ["No", "Yes"], horizontal=True)
+# -------------------------------------
+# STEP 2 — Demographics
+# -------------------------------------
+elif st.session_state.step == 2:
+    st.markdown("<div class='card'>", unsafe_allow_html=True)
 
-with col2:
-    seizure_type = None
-    if has_seizures == "Yes":
-        seizure_type = st.selectbox(
-            "Seizure Type",
+    data.age = st.selectbox("Age", list(range(18,101)))
+    st.caption("Used to assess general health risk.")
+
+    data.height = st.selectbox("Height (inches)", list(range(50,85)))
+    data.weight = st.selectbox("Weight (lbs)", list(range(80,301)))
+
+    col1,col2 = st.columns(2)
+    with col1:
+        if st.button("← Back"):
+            st.session_state.step -= 1
+
+    with col2:
+        if st.button("Next →"):
+            st.session_state.step += 1
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+# -------------------------------------
+# STEP 3 — Medical
+# -------------------------------------
+elif st.session_state.step == 3:
+    st.markdown("<div class='card'>", unsafe_allow_html=True)
+
+    data.seizures = st.radio("History of seizures?", ["No","Yes"], horizontal=True)
+
+    data.seizure_type = ""
+    if data.seizures == "Yes":
+        data.seizure_type = st.selectbox(
+            "Seizure type",
             [
-                "Generalized — Tonic-clonic",
-                "Generalized — Atonic (drop attacks)",
-                "Generalized — Tonic only",
-                "Generalized — Clonic / Myoclonic",
-                "Focal (aware or impaired awareness)",
-                "Generalized — Absence",
-            ],
+                "Generalized—Tonic-clonic",
+                "Generalized—Atonic",
+                "Generalized—Tonic only",
+                "Clonic/Myoclonic",
+                "Focal",
+                "Absence"
+            ]
         )
 
-col3, col4 = st.columns([2,3])
+    col1,col2 = st.columns(2)
+    with col1:
+        if st.button("← Back"):
+            st.session_state.step -= 1
+    with col2:
+        if st.button("Next →"):
+            if data.seizures=="Yes" and not data.seizure_type:
+                st.warning("Please select a seizure type.")
+            else:
+                st.session_state.step += 1
 
-with col3:
-    medications = st.radio("Medication?", ["No", "Yes"], horizontal=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
-with col4:
-    med_reason = ""
-    med_details = ""
+# -------------------------------------
+# STEP 4 — Medications
+# -------------------------------------
+elif st.session_state.step == 4:
+    st.markdown("<div class='card'>", unsafe_allow_html=True)
 
-    if medications == "Yes":
-        med_reason = st.selectbox(
-            "Medication Reason",
-            ["ADHD", "Heart", "Blood Pressure", "Seizure Medications", "Diabetes", "Other"],
+    data.medications = st.radio("Does the client take medication?",["No","Yes"],horizontal=True)
+
+    data.med_reason = data.med_details = ""
+
+    if data.medications == "Yes":
+        data.med_reason = st.selectbox(
+            "Primary medication reason",
+            ["ADHD","Heart","Blood Pressure","Seizure Meds","Diabetes","Other"]
         )
-        med_details = st.text_input("Medication + Dosage")
 
-col5, col6 = st.columns([2,3])
+        data.med_details = st.text_input(
+            "Medication names & dosage",
+            placeholder="Example: Keppra 500mg twice daily"
+        )
 
-with col5:
-    adult_present = st.radio("Adult present during shift?", ["No", "Yes"], horizontal=True)
+    col1,col2 = st.columns(2)
+    with col1:
+        if st.button("← Back"):
+            st.session_state.step -= 1
 
-with col6:
-    adult1 = adult2 = ""
-    if adult_present == "Yes":
-        adult1 = st.text_input("Adult #1 Name")
-        adult2 = st.text_input("Adult #2 Name")
+    with col2:
+        if st.button("Next →"):
+            st.session_state.step += 1
 
-mobility = st.selectbox("Mobility Score (1 = best, 5 = worst)", list(range(1,6)))
+    st.markdown("</div>", unsafe_allow_html=True)
 
-st.markdown("</div>", unsafe_allow_html=True)
+# -------------------------------------
+# STEP 5 — Safety
+# -------------------------------------
+elif st.session_state.step == 5:
+    st.markdown("<div class='card'>", unsafe_allow_html=True)
 
-# --- Additional notes ---
-st.markdown("<div class='card'>", unsafe_allow_html=True)
-st.markdown("<div class='section-title'>Additional Medical Notes</div>", unsafe_allow_html=True)
-additional_info = st.text_area("", placeholder="Any additional information...")
-st.markdown("</div>", unsafe_allow_html=True)
+    data.adult_present = st.radio("Will an adult be present during care?",["No","Yes"],horizontal=True)
 
-# --- Risk scoring ---
-score = 0
-score += age * 0.2
-score += weight * 0.05
-score += height * 0.05
-score += mobility * 5
+    data.adult1=data.adult2=""
+    if data.adult_present=="Yes":
+        data.adult1 = st.text_input("Adult #1 name")
+        data.adult2 = st.text_input("Adult #2 name")
 
-if has_seizures == "Yes":
-    score += 10
-    weights = {
-        "Generalized — Tonic-clonic":20,
-        "Generalized — Atonic (drop attacks)":15,
-        "Generalized — Tonic only":12,
-        "Generalized — Clonic / Myoclonic":10,
-        "Focal (aware or impaired awareness)":8,
-        "Generalized — Absence":5,
+    data.mobility = st.selectbox("Mobility score (1 best – 5 worst)",list(range(1,6)))
+    st.caption("Lower mobility increases fall & safety risk.")
+
+    data.notes = st.text_area("Additional medical notes")
+
+    col1,col2 = st.columns(2)
+    with col1:
+        if st.button("← Back"):
+            st.session_state.step -= 1
+
+    with col2:
+        if st.button("Next →"):
+            st.session_state.step += 1
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+# -------------------------------------
+# STEP 6 — REVIEW
+# -------------------------------------
+elif st.session_state.step == 6:
+    
+    # ----- SCORING -----
+    score = 0
+    score += data.age * 0.2
+    score += data.weight * 0.05
+    score += data.height * 0.05
+    score += data.mobility * 5
+    
+    seizure_weights = {
+        "Generalized—Tonic-clonic":20,
+        "Generalized—Atonic":15,
+        "Generalized—Tonic only":12,
+        "Clonic/Myoclonic":10,
+        "Focal":8,
+        "Absence":5
     }
-    score += weights.get(seizure_type, 0)
 
-if medications == "Yes":
-    score += 10
-if adult_present == "Yes":
-    score -= 5
+    if data.seizures=="Yes":
+        score += 10
+        score += seizure_weights.get(data.seizure_type,0)
 
-# --- Risk Level ---
-if score > 70:
-    level, cls = "High Risk", "high"
-elif score > 45:
-    level, cls = "Medium Risk", "medium"
-else:
-    level, cls = "Low Risk", "low"
+    if data.medications=="Yes":
+        score += 10
 
-# --- Display results ---
-st.markdown("<div class='card'>", unsafe_allow_html=True)
+    if data.adult_present=="Yes":
+        score -= 5
+    
+    # ----- LEVEL -----
+    if score > 70:
+        level, cls = "High Risk", "high"
+        text = "Client requires close monitoring and potential 1:1 supervision."
+    elif score > 45:
+        level, cls = "Medium Risk","medium"
+        text = "Client suitable for home care with moderate safety oversight."
+    else:
+        level, cls = "Low Risk","low"
+        text = "Client appropriate for standard home care services."
 
-c1, c2 = st.columns([2,3])
+    # ----- OUTPUT -----
+    st.markdown("<div class='card'>", unsafe_allow_html=True)
 
-with c1:
-    st.markdown(f"<div class='badge {cls}'>{level}</div>", unsafe_allow_html=True)
-    st.markdown("<div class='muted'>Risk Level</div>", unsafe_allow_html=True)
+    st.markdown(f"<span class='badge {cls}'>{level}</span>", unsafe_allow_html=True)
+    st.metric("Risk Score",round(score,1))
+    st.write(text)
 
-with c2:
-    st.metric("Risk Score", f"{round(score,1)}")
+    st.divider()
 
-st.markdown("</div>", unsafe_allow_html=True)
+    st.subheader("Client Summary")
 
-# --- Summary ---
-st.markdown("<div class='card'>", unsafe_allow_html=True)
-st.markdown("<div class='section-title'>Client Summary</div>", unsafe_allow_html=True)
+    for key,val in data.items():
+        st.markdown(f"**{key.replace('_',' ').title()}**: {val}")
 
-summary_html = f"""
-<table style='width:100%'>
-<tr><th>Field</th><th>Value</th></tr>
-<tr><td>Client Name</td><td>{client_name}</td></tr>
-<tr><td>Client ID</td><td>{client_id}</td></tr>
-<tr><td>Age</td><td>{age}</td></tr>
-<tr><td>Height</td><td>{height}</td></tr>
-<tr><td>Weight</td><td>{weight}</td></tr>
-<tr><td>Seizures</td><td>{has_seizures}</td></tr>
-<tr><td>Seizure Type</td><td>{seizure_type}</td></tr>
-<tr><td>Medication</td><td>{medications}</td></tr>
-<tr><td>Medication Reason</td><td>{med_reason}</td></tr>
-<tr><td>Medication Details</td><td>{med_details}</td></tr>
-<tr><td>Adults Present</td><td>{adult1} {adult2}</td></tr>
-<tr><td>Mobility</td><td>{mobility}</td></tr>
-<tr><td>Risk Level</td><td>{level}</td></tr>
-<tr><td>Risk Score</td><td>{round(score,1)}</td></tr>
-<tr><td>Additional Notes</td><td>{additional_info}</td></tr>
-</table>
-"""
+    if st.button("← Edit"):
+        st.session_state.step = 1
 
-st.markdown(summary_html, unsafe_allow_html=True)
-st.markdown("</div>", unsafe_allow_html=True)
-
-# --- AI ASSISTANT ---
-st.markdown("<div class='card'>", unsafe_allow_html=True)
-st.markdown("<div class='section-title'>🤖 Need Help? Ask Our AI Assistant</div>", unsafe_allow_html=True)
-
-user_question = st.text_input("Ask a general question about this form or the terms used:")
-
-if user_question:
-    with st.spinner("Thinking..."):
-        try:
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {
-                        "role":"system",
-                        "content":"You assist users completing a healthcare risk form. Explain terms and guide them safely. Do not provide medical diagnosis or treatment advice."
-                    },
-                    {"role":"user","content":user_question}
-                ]
-            )
-
-            ai_reply = response.choices[0].message.content
-            st.success(ai_reply)
-
-        except Exception as e:
-            st.error("AI service is temporarily unavailable.")
-
-st.markdown("</div>", unsafe_allow_html=True)
-
-# --- Footer ---
-st.markdown("""
-<div style='text-align:center; margin-top:12px; color:#718096; font-size:12px;'>
-Home Care Comfort — Confidential | AI assistant does not store any personal data.
-</div>
-""", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
