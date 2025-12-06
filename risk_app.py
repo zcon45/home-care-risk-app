@@ -627,14 +627,9 @@ def run_home_care_risk_assessment():
                             "frequency": m_freq.strip()
                         }
                     )
-
-                    st.session_state.update({
-                        "new_med_name": "",
-                        "new_med_dose": "",
-                        "new_med_freq": ""
-                    })
-
-                    st.rerun()
+                    # We no longer try to clear widget values programmatically
+                    # to avoid Streamlit session_state restrictions.
+                    # The user can manually change or clear the fields.
 
             st.markdown("### Current Medications")
 
