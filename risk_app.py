@@ -619,10 +619,13 @@ def run_home_care_risk_assessment():
                     data.med_list.append(
                         {"name": m_name.strip(), "dosage": m_dose.strip(), "frequency": m_freq.strip()}
                     )
-                    st.session_state.new_med_name = ""
-                    st.session_state.new_med_dose = ""
-                    st.session_state.new_med_freq = ""
-                    st.rerun()
+                    st.session_state.update({
+    "new_med_name": "",
+    "new_med_dose": "",
+    "new_med_freq": ""
+})
+st.rerun()
+
 
             st.markdown("### Current Medications")
             if not data.med_list:
@@ -875,3 +878,4 @@ elif data.app_stage == "assessment_run":
         run_business_risk_assessment()
     else:
         st.write("Selected assessment is not available yet.")
+
