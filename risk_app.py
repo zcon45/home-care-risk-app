@@ -1,4 +1,39 @@
 import streamlit as st
+from pathlib import Path
+from datetime import datetime
+
+# ---------------------------------------------------
+# LOCAL DEV STORAGE PATH (PRACTICE UPLOADS ONLY)
+# ---------------------------------------------------
+
+UPLOAD_PATH = Path(
+    r"C:\Users\zach_\OneDrive\Documents\Personal Risk Assessment Project\Practice Assessments"
+)
+UPLOAD_PATH.mkdir(parents=True, exist_ok=True)
+
+def save_uploaded_file(uploaded_file):
+    """Save an uploaded file into the practice folder with a timestamped name."""
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    original = Path(uploaded_file.name)
+    filename = f"{original.stem}_{timestamp}{original.suffix}"
+    full_path = UPLOAD_PATH / filename
+
+    with open(full_path, "wb") as f:
+        f.write(uploaded_file.read())
+
+    return full_path
+
+def render_upload_box():
+    """Small shared upload box shown in assessments (practice data only)."""
+    st.subheader("📁 Upload practice assessment documents")
+    uploaded_file = st.file_uploader(
+        "Upload PDFs, images, or documents related to this assessment (TEST DATA ONLY)",
+        type=["pdf", "png", "jpg", "jpeg", "docx"]
+    )
+    if uploaded_file:
+        saved_path = save_uploaded_file(uploaded_file)
+        st.success("File saved to your practice folder.")
+        st.caption(f"Saved at: {saved_path}")
 
 # ---------------------------------------------------
 # PAGE CONFIG
@@ -49,14 +84,6 @@ body{ background:#f4fbfd; }
     margin-top:8px;
 }
 
-input[type=number]::-webkit-inner-spin_button,
-input[type=number]::-webkit-outer-spin_button{
-    -webkit-appearance:none;
-    margin:0;
-}
-input[type=number]{
-    -moz-appearance:textfield;
-}
 </style>
 """, unsafe_allow_html=True)
 
@@ -108,11 +135,7 @@ TOTAL_STEPS = len(STEPS)
 # ---------------------------------------------------
 
 def go_to_industries():
-    st.session_state.app_stage = "industry_select"
-    st.session_state.industry = None
-    st.session_state.assessment = None
-    st.session_state.step = 1
-    st.session_state.biz_step = 1
+    reset_all()
 
 def go_to_assessment_select():
     st.session_state.app_stage = "assessment_select"
@@ -346,6 +369,10 @@ def run_business_risk_assessment():
     st.markdown(f"### Business Risk Assessment (AI-style) — Step {data.biz_step} of 3")
     st.progress(data.biz_step / 3)
 
+    # Shared upload box (practice docs only)
+    render_upload_box()
+    st.markdown("---")
+
     # STEP 1 – Scenario intake
     if data.biz_step == 1:
         st.markdown("<div class='card'>", unsafe_allow_html=True)
@@ -514,6 +541,10 @@ def run_home_care_risk_assessment():
     st.markdown(f"### Home Care Risk Assessment — Step {data.step} of {TOTAL_STEPS} · {STEPS[data.step]}")
     st.progress(data.step / TOTAL_STEPS)
 
+    # Shared upload box (practice docs only)
+    render_upload_box()
+    st.markdown("---")
+
     # STEP 1 – Client Info
     if data.step == 1:
         st.markdown("<div class='card'>", unsafe_allow_html=True)
@@ -627,9 +658,9 @@ def run_home_care_risk_assessment():
                             "frequency": m_freq.strip()
                         }
                     )
-                    # We no longer try to clear widget values programmatically
-                    # to avoid Streamlit session_state restrictions.
-                    # The user can manually change or clear the fields.
+                    # Do NOT try to clear widget keys programmatically; Streamlit Cloud
+                    # can error if we mutate widget-bound state directly.
+                    # Users can overwrite values manually if they wish.
 
             st.markdown("### Current Medications")
 
@@ -794,7 +825,7 @@ def run_home_care_risk_assessment():
                 for idx_m, med in enumerate(data.med_list, start=1):
                     st.write(f"**Medication {idx_m}:**")
                     st.write(f" • Name: {med['name']}")
-                    st.write(f" • Dosage: {med['dosage']}")
+                    st.write(f" • Dosage: {med['dosage']}") 
                     st.write(f" • Frequency: {med['frequency']}")
             else:
                 st.write("No medications entered.")
@@ -884,3 +915,4 @@ elif data.app_stage == "assessment_run":
         run_business_risk_assessment()
     else:
         st.write("Selected assessment is not available yet.")
+
