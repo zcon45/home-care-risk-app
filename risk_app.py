@@ -2,45 +2,301 @@ import streamlit as st
 from pathlib import Path
 from datetime import datetime
 
+# Try to import PDF tools
+try:
+    from fpdf import FPDF
+    FPDF_AVAILABLE = True
+except ImportError:
+    FPDF_AVAILABLE = False
+
+try:
+    from PyPDF2 import PdfReader, PdfWriter
+    PYPDF2_AVAILABLE = True
+except ImportError:
+    PYPDF2_AVAILABLE = False
+
 # ---------------------------------------------------
-# LOCAL DEV STORAGE PATH (PRACTICE UPLOADS ONLY)
+# LOCAL DEV STORAGE PATH (PRACTICE ONLY)
 # ---------------------------------------------------
 
-UPLOAD_PATH = Path(
+BASE_SAVE_PATH = Path(
     r"C:\Users\zach_\OneDrive\Documents\Personal Risk Assessment Project\Practice Assessments"
 )
-UPLOAD_PATH.mkdir(parents=True, exist_ok=True)
+BASE_SAVE_PATH.mkdir(parents=True, exist_ok=True)
 
-def save_uploaded_file(uploaded_file):
-    """Save an uploaded file into the practice folder with a timestamped name."""
+
+# ---------------------------------------------------
+# HELPERS FOR FILE SAVING & PDF GENERATION
+# ---------------------------------------------------
+
+def save_uploaded_file_to_disk(file_bytes: bytes, original_name: str, suffix: str = "") -> Path:
+    """
+    Save an uploaded file (bytes) under BASE_SAVE_PATH with a timestamped name.
+    Returns full path.
+    """
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    original = Path(uploaded_file.name)
-    filename = f"{original.stem}_{timestamp}{original.suffix}"
-    full_path = UPLOAD_PATH / filename
+    original = Path(original_name)
+    new_name = f"{original.stem}{suffix}_{timestamp}{original.suffix}"
+    out_path = BASE_SAVE_PATH / new_name
+    with open(out_path, "wb") as f:
+        f.write(file_bytes)
+    return out_path
 
-    with open(full_path, "wb") as f:
-        f.write(uploaded_file.read())
 
-    return full_path
+def build_ai_style_summary(data, score: float, level: str) -> str:
+    """
+    Simple rule-based 'AI-style' summary of the assessment.
+    No external API – runs locally.
+    """
+    lines = []
+    lines.append(f"Overall, this client is assessed as {level.lower()} with a risk score of {score:.1f}.")
+    lines.append("Key factors considered in this assessment include age, weight, height, seizure history, "
+                 "medication use, mobility level, adult supervision, and any additional notes provided.")
 
-def render_upload_box():
-    """Small shared upload box shown in assessments (practice data only)."""
-    st.subheader("📁 Upload practice assessment documents")
-    uploaded_file = st.file_uploader(
-        "Upload PDFs, images, or documents related to this assessment (TEST DATA ONLY)",
-        type=["pdf", "png", "jpg", "jpeg", "docx"]
-    )
-    if uploaded_file:
-        saved_path = save_uploaded_file(uploaded_file)
-        st.success("File saved to your practice folder.")
-        st.caption(f"Saved at: {saved_path}")
+    # Age factor
+    try:
+        age = int(data.get("age", 0))
+        if age >= 80:
+            lines.append("Advanced age contributes to increased risk for falls and medical complications.")
+        elif age >= 65:
+            lines.append("Older adult status is a moderate risk factor.")
+        else:
+            lines.append("Age does not appear to be a primary risk driver in this case.")
+    except Exception:
+        pass
+
+    # Seizure factor
+    if data.get("seizures") == "Yes":
+        stype = data.get("seizure_type", "unspecified")
+        lines.append(f"There is a history of seizures ({stype}), which elevates safety and supervision needs.")
+
+    # Medications
+    if data.get("medications") == "Yes":
+        if data.get("med_list"):
+            lines.append("The client takes one or more medications, which may increase complexity of care "
+                         "and the need for monitoring adherence and side effects.")
+        else:
+            lines.append("Medication use is reported, but no specific medications were entered.")
+
+    # Mobility
+    mobility_label = data.get("mobility_label", "")
+    if mobility_label:
+        lines.append(f"Mobility level is documented as: {mobility_label}.")
+        if "Non-mobile" in mobility_label or "bedridden" in mobility_label:
+            lines.append("Limited or absent mobility significantly increases risk for pressure injuries and "
+                         "dependence on caregivers for transfers.")
+        elif "Uses mobility aid" in mobility_label or "hands-on assist" in mobility_label:
+            lines.append("Mobility support is required, increasing fall and transfer risk.")
+        else:
+            lines.append("Mobility appears relatively independent, which lowers physical risk in some areas.")
+
+    # Adult supervision
+    if data.get("adult_present") == "Yes":
+        lines.append("An adult is expected to be present during care, which may help mitigate risk and "
+                     "support safe decision-making.")
+    else:
+        lines.append("No consistent adult supervision is expected during care, which can increase overall risk.")
+
+    # Notes
+    notes = data.get("notes", "").strip()
+    if notes:
+        lines.append("Additional notes were provided and should be reviewed for context and specific concerns.")
+
+    lines.append("This summary is intended to support clinical judgment and does not replace a full professional "
+                 "assessment or care plan.")
+    return "\n\n".join(lines)
+
+
+def generate_summary_pdf(data, score: float, level: str, client_full_name: str, dob_str: str) -> Path:
+    """
+    Generate a PDF summarizing the assessment & AI-style narrative.
+    Requires FPDF. Returns path to the summary PDF.
+    """
+    if not FPDF_AVAILABLE:
+        raise RuntimeError("FPDF is not installed. Please run 'pip install fpdf2'.")
+
+    pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 16)
+
+    pdf.cell(0, 10, "Home Care Risk Assessment Summary", ln=True)
+    pdf.ln(4)
+
+    pdf.set_font("Arial", "", 12)
+    pdf.cell(0, 8, f"Client: {client_full_name}", ln=True)
+    pdf.cell(0, 8, f"Date of Birth: {dob_str}", ln=True)
+    pdf.cell(0, 8, f"Client ID: {data.get('client_id','')}", ln=True)
+    pdf.ln(4)
+
+    pdf.cell(0, 8, f"Risk Level: {level}", ln=True)
+    pdf.cell(0, 8, f"Risk Score: {score:.1f}", ln=True)
+    pdf.ln(6)
+
+    # Section: Raw assessment details
+    pdf.set_font("Arial", "B", 13)
+    pdf.cell(0, 8, "Assessment Details", ln=True)
+    pdf.ln(3)
+    pdf.set_font("Arial", "", 11)
+
+    # Simple helper for wrapping text
+    def add_line(label, value):
+        pdf.set_font("Arial", "B", 11)
+        pdf.multi_cell(0, 6, f"{label}", ln=True)
+        pdf.set_font("Arial", "", 11)
+        pdf.multi_cell(0, 6, f"{value}", ln=True)
+        pdf.ln(1)
+
+    add_line("Age:", data.get("age", ""))
+    add_line("Height (feet/inches):",
+             f"{data.get('height_feet','')} ft {data.get('height_inches','')} in")
+    add_line("Weight (lbs):", data.get("weight", ""))
+
+    add_line("History of Seizures:", data.get("seizures", ""))
+    if data.get("seizures") == "Yes":
+        add_line("Seizure Type:", data.get("seizure_type", ""))
+
+    add_line("Takes Medication:", data.get("medications", ""))
+    if data.get("medications") == "Yes":
+        meds = data.get("med_list", [])
+        if meds:
+            med_texts = []
+            for idx, med in enumerate(meds, start=1):
+                med_texts.append(
+                    f"{idx}. {med['name']} – {med['dosage']} – {med['frequency']}"
+                )
+            add_line("Medications:", "\n".join(med_texts))
+        else:
+            add_line("Medications:", "Reported, but no specific medications entered.")
+
+    add_line("Mobility Level:", data.get("mobility_label", ""))
+    add_line("Adult Present During Care:", data.get("adult_present", ""))
+    if data.get("adult_present") == "Yes":
+        adult_lines = []
+        if data.get("adult1"):
+            adult_lines.append(f"Adult #1: {data.get('adult1')} ({data.get('rel1')})")
+        if data.get("adult2"):
+            rel2 = data.get("rel2", "")
+            adult_lines.append(f"Adult #2: {data.get('adult2')} ({rel2})" if rel2 else f"Adult #2: {data.get('adult2')}")
+        if adult_lines:
+            add_line("Adults Present:", "\n".join(adult_lines))
+
+    notes = data.get("notes", "").strip()
+    if notes:
+        add_line("Additional Notes:", notes)
+
+    # AI-style narrative summary
+    summary_text = build_ai_style_summary(data, score, level)
+    pdf.ln(4)
+    pdf.set_font("Arial", "B", 13)
+    pdf.cell(0, 8, "AI-Style Summary", ln=True)
+    pdf.ln(2)
+    pdf.set_font("Arial", "", 11)
+    pdf.multi_cell(0, 6, summary_text)
+
+    # Save summary PDF
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    safe_name = client_full_name.replace("/", "_")
+    out_name = f"{safe_name}_assessment_summary_{timestamp}.pdf"
+    out_path = BASE_SAVE_PATH / out_name
+    pdf.output(str(out_path))
+
+    return out_path
+
+
+def merge_pdfs(uploaded_pdf: Path, summary_pdf: Path, final_path: Path) -> Path:
+    """
+    Merge the uploaded client PDF + assessment summary PDF into a single file.
+    uploaded_pdf comes first, then summary.
+    Requires PyPDF2.
+    """
+    if not PYPDF2_AVAILABLE:
+        raise RuntimeError("PyPDF2 not installed. Please run 'pip install PyPDF2'.")
+
+    writer = PdfWriter()
+
+    # Add uploaded PDF pages
+    if uploaded_pdf and uploaded_pdf.exists():
+        reader1 = PdfReader(str(uploaded_pdf))
+        for page in reader1.pages:
+            writer.add_page(page)
+
+    # Add summary PDF pages
+    reader2 = PdfReader(str(summary_pdf))
+    for page in reader2.pages:
+        writer.add_page(page)
+
+    with open(final_path, "wb") as f:
+        writer.write(f)
+
+    return final_path
+
+
+def build_final_pdf(data, score: float, level: str):
+    """
+    High-level helper:
+      - Save uploaded PDF (if any)
+      - Generate summary PDF
+      - Merge into final single PDF if PyPDF2 is available
+    Returns (final_path, message_string).
+    """
+    first = data.get("first_name", "").strip()
+    last = data.get("last_name", "").strip()
+    dob_date = data.get("dob")
+    if dob_date:
+        dob_str = dob_date.strftime("%Y-%m-%d")
+    else:
+        dob_str = "Unknown-DOB"
+
+    client_full_name = f"{first} {last}".strip()
+    if not client_full_name:
+        client_full_name = "Unknown Client"
+
+    # Base final file name: LastName, FirstName - DOB.pdf
+    if last and first and dob_str != "Unknown-DOB":
+        final_filename = f"{last}, {first} - {dob_str}.pdf"
+    else:
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        final_filename = f"{client_full_name.replace(' ', '_')}_{timestamp}.pdf"
+
+    final_path = BASE_SAVE_PATH / final_filename
+
+    # Step 1: Save uploaded pdf (if present)
+    uploaded_saved_path = None
+    if data.get("uploaded_pdf_bytes") and data.get("uploaded_pdf_name"):
+        uploaded_saved_path = save_uploaded_file_to_disk(
+            data.uploaded_pdf_bytes,
+            data.uploaded_pdf_name,
+            suffix="_original"
+        )
+
+    # Step 2: Create summary PDF
+    summary_pdf_path = generate_summary_pdf(data, score, level, client_full_name, dob_str)
+
+    # Step 3: Try merging
+    if uploaded_saved_path and PYPDF2_AVAILABLE:
+        merge_pdfs(uploaded_saved_path, summary_pdf_path, final_path)
+        msg = f"Final combined PDF (client upload + assessment summary) saved to:\n{final_path}"
+    else:
+        # If no uploaded or no PyPDF2, just copy the summary as the final
+        summary_pdf_path.replace(final_path)
+        if not uploaded_saved_path:
+            msg = f"No uploaded PDF. Summary PDF saved to:\n{final_path}"
+        else:
+            msg = (
+                "PyPDF2 is not installed, so the uploaded PDF and summary "
+                f"were not merged. Summary-only PDF saved to:\n{final_path}"
+            )
+
+    return final_path, msg
+
 
 # ---------------------------------------------------
 # PAGE CONFIG
 # ---------------------------------------------------
 
 st.set_page_config(
-    page_title="Home Care Comfort Portal",
+    page_title="Home Care Risk Assessment",
     layout="centered"
 )
 
@@ -68,468 +324,54 @@ body{ background:#f4fbfd; }
 .high{ background:#e53e3e; }
 .medium{ background:#dd6b20; }
 .low{ background:#10b981; }
-
-.industry-card {
-    background:#ffffff;
-    padding:18px;
-    border-radius:12px;
-    box-shadow:0px 4px 10px rgba(0,0,0,.04);
-    text-align:center;
-    cursor:pointer;
-    border:1px solid #e2e8f0;
-}
-.industry-title {
-    font-size:16px;
-    font-weight:600;
-    margin-top:8px;
-}
-
 </style>
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------
-# SESSION STATE INIT
+# SESSION STATE INIT (HOME CARE ONLY)
 # ---------------------------------------------------
 
-if "app_stage" not in st.session_state:
-    st.session_state.app_stage = "industry_select"   # industry_select, assessment_select, assessment_run
-
-if "industry" not in st.session_state:
-    st.session_state.industry = None
-
-if "assessment" not in st.session_state:
-    st.session_state.assessment = None
-
-# Home care assessment state
 if "step" not in st.session_state:
     st.session_state.step = 1
 
 if "med_list" not in st.session_state:
     st.session_state.med_list = []
 
-# Business assessment state
-if "biz_step" not in st.session_state:
-    st.session_state.biz_step = 1
-
-if "biz_assessment" not in st.session_state:
-    st.session_state.biz_assessment = None
-
-if "biz_answers" not in st.session_state:
-    st.session_state.biz_answers = {}
+# store uploaded pdf in session_state
+for key in ["uploaded_pdf_bytes", "uploaded_pdf_name"]:
+    if key not in st.session_state:
+        st.session_state[key] = None
 
 data = st.session_state
 
-# Steps for Home Care assessment
 STEPS = {
-    1: "Client Info",
+    1: "Client Info & Upload",
     2: "Demographics",
     3: "Medical History",
     4: "Medications",
     5: "Mobility & Safety",
-    6: "Review"
+    6: "Review & Submit"
 }
 TOTAL_STEPS = len(STEPS)
 
-# ---------------------------------------------------
-# NAV HELPERS
-# ---------------------------------------------------
-
-def go_to_industries():
-    reset_all()
-
-def go_to_assessment_select():
-    st.session_state.app_stage = "assessment_select"
-    st.session_state.assessment = None
-    st.session_state.step = 1
-    st.session_state.biz_step = 1
-
-def start_home_care_assessment():
-    st.session_state.assessment = "home_care_risk"
-    st.session_state.app_stage = "assessment_run"
-    st.session_state.step = 1
-    st.session_state.med_list = []
-
-def start_business_assessment():
-    st.session_state.assessment = "business_ai_risk"
-    st.session_state.app_stage = "assessment_run"
-    st.session_state.biz_step = 1
-    st.session_state.biz_assessment = None
-    st.session_state.biz_answers = {}
 
 def next_step():
     st.session_state.step += 1
 
+
 def prev_step():
     st.session_state.step -= 1
 
-def reset_all():
-    st.session_state.clear()
-    st.session_state.app_stage = "industry_select"
+
+def reset_flow():
+    # Clear only relevant keys, not entire session
+    for k in list(st.session_state.keys()):
+        del st.session_state[k]
     st.session_state.step = 1
     st.session_state.med_list = []
-    st.session_state.biz_step = 1
-    st.session_state.biz_assessment = None
-    st.session_state.biz_answers = {}
+    st.session_state.uploaded_pdf_bytes = None
+    st.session_state.uploaded_pdf_name = None
 
-# ---------------------------------------------------
-# BUSINESS "AI-STYLE" ASSESSMENT GENERATOR
-# ---------------------------------------------------
-
-def generate_business_assessment_structure(description, sector, counterpart):
-    """
-    Simple rule-based generator that creates a structured
-    business risk assessment from the user's description.
-    This is written so you can later swap in a real AI model.
-    """
-    base_sections = []
-
-    # Counterparty & Relationship
-    base_sections.append({
-        "name": "Counterparty & Relationship",
-        "description": "Understand who you are working with and how critical they are to your business.",
-        "questions": [
-            {
-                "id": "counterparty_country",
-                "text": "Which countries does this counterparty operate in or ship from?",
-                "type": "text",
-                "weight": 2,
-                "scoring_map": None,
-            },
-            {
-                "id": "relationship_type",
-                "text": "What best describes this counterparty relationship?",
-                "type": "select",
-                "options": ["Supplier", "Customer", "Partner", "Investor", "Other"],
-                "weight": 2,
-                "scoring_map": {
-                    "Supplier": 2,
-                    "Customer": 2,
-                    "Partner": 3,
-                    "Investor": 3,
-                    "Other": 2,
-                },
-            },
-            {
-                "id": "dependency_level",
-                "text": "How dependent is your business on this counterparty for revenue or supply?",
-                "type": "select",
-                "options": ["Low", "Medium", "High", "Critical"],
-                "weight": 3,
-                "scoring_map": {"Low": 1, "Medium": 2, "High": 3, "Critical": 4},
-            },
-        ],
-    })
-
-    # Country & Regulatory Risk
-    base_sections.append({
-        "name": "Country & Regulatory Risk",
-        "description": "Identify exposure to tariffs, sanctions, and regulatory instability.",
-        "questions": [
-            {
-                "id": "tariff_exposure",
-                "text": "Are your products or services impacted by tariffs or trade duties?",
-                "type": "select",
-                "options": ["No", "Minor impact", "Moderate impact", "Significant impact"],
-                "weight": 3,
-                "scoring_map": {
-                    "No": 1,
-                    "Minor impact": 2,
-                    "Moderate impact": 3,
-                    "Significant impact": 4,
-                },
-            },
-            {
-                "id": "sanctions_risk",
-                "text": "Are any countries involved currently subject to sanctions or export controls?",
-                "type": "select",
-                "options": ["No known sanctions", "Possibly", "Yes"],
-                "weight": 4,
-                "scoring_map": {
-                    "No known sanctions": 1,
-                    "Possibly": 3,
-                    "Yes": 4,
-                },
-            },
-            {
-                "id": "regulatory_complexity",
-                "text": "How complex are the regulations that apply to this transaction or product?",
-                "type": "select",
-                "options": ["Low", "Moderate", "High", "Very high"],
-                "weight": 3,
-                "scoring_map": {
-                    "Low": 1,
-                    "Moderate": 2,
-                    "High": 3,
-                    "Very high": 4,
-                },
-            },
-        ],
-    })
-
-    # Operational & Supply Chain
-    base_sections.append({
-        "name": "Operational & Supply Chain Risk",
-        "description": "Evaluate logistics, reliability, and continuity of supply or service.",
-        "questions": [
-            {
-                "id": "lead_time",
-                "text": "What is the typical lead time for deliveries or project milestones?",
-                "type": "select",
-                "options": ["Same week", "1–4 weeks", "1–3 months", "More than 3 months"],
-                "weight": 2,
-                "scoring_map": {
-                    "Same week": 1,
-                    "1–4 weeks": 2,
-                    "1–3 months": 3,
-                    "More than 3 months": 4,
-                },
-            },
-            {
-                "id": "contingency_plans",
-                "text": "Do you have backup suppliers, routes, or contingency plans in place?",
-                "type": "select",
-                "options": ["Yes – strong backups", "Some backups", "Minimal backups", "No backups"],
-                "weight": 3,
-                "scoring_map": {
-                    "Yes – strong backups": 1,
-                    "Some backups": 2,
-                    "Minimal backups": 3,
-                    "No backups": 4,
-                },
-            },
-        ],
-    })
-
-    # Financial & Reputation
-    base_sections.append({
-        "name": "Financial & Reputation Risk",
-        "description": "Assess financial stability and potential brand or reputation impact.",
-        "questions": [
-            {
-                "id": "financial_health",
-                "text": "How confident are you in the counterparty’s financial health?",
-                "type": "select",
-                "options": ["Very confident", "Somewhat confident", "Unsure", "Concerned"],
-                "weight": 3,
-                "scoring_map": {
-                    "Very confident": 1,
-                    "Somewhat confident": 2,
-                    "Unsure": 3,
-                    "Concerned": 4,
-                },
-            },
-            {
-                "id": "reputation_risk",
-                "text": "Could working with this counterparty negatively impact your brand or public image?",
-                "type": "select",
-                "options": ["Very unlikely", "Unlikely", "Possible", "Likely"],
-                "weight": 3,
-                "scoring_map": {
-                    "Very unlikely": 1,
-                    "Unlikely": 2,
-                    "Possible": 3,
-                    "Likely": 4,
-                },
-            },
-        ],
-    })
-
-    # Notes
-    base_sections.append({
-        "name": "Notes & Context",
-        "description": "Capture any additional details that could affect risk.",
-        "questions": [
-            {
-                "id": "extra_context",
-                "text": "Any additional details about this deal, partner, or context?",
-                "type": "text_long",
-                "weight": 0,
-                "scoring_map": None,
-            }
-        ],
-    })
-
-    return {
-        "assessment_name": "AI-Style Business Risk Assessment",
-        "sector": sector,
-        "counterpart": counterpart,
-        "description": description,
-        "sections": base_sections,
-    }
-
-# ---------------------------------------------------
-# BUSINESS RISK ASSESSMENT FLOW
-# ---------------------------------------------------
-
-def run_business_risk_assessment():
-    data = st.session_state
-    if "biz_step" not in data:
-        data.biz_step = 1
-
-    st.markdown(f"### Business Risk Assessment (AI-style) — Step {data.biz_step} of 3")
-    st.progress(data.biz_step / 3)
-
-    # Shared upload box (practice docs only)
-    render_upload_box()
-    st.markdown("---")
-
-    # STEP 1 – Scenario intake
-    if data.biz_step == 1:
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
-
-        data.biz_name = st.text_input("Business name", value=data.get("biz_name", ""))
-        sectors = [
-            "Fashion / Apparel", "Manufacturing", "Technology / Software",
-            "Retail / E-commerce", "Logistics / Transport", "Other"
-        ]
-        data.biz_sector = st.selectbox(
-            "Primary sector",
-            sectors,
-            index=sectors.index(data.get("biz_sector", "Fashion / Apparel"))
-            if data.get("biz_sector") in sectors else 0
-        )
-        counterparts = ["Supplier", "Customer", "Partner", "Investor", "Other"]
-        data.biz_counterpart = st.selectbox(
-            "Counterparty type",
-            counterparts,
-            index=counterparts.index(data.get("biz_counterpart", "Supplier"))
-            if data.get("biz_counterpart") in counterparts else 0
-        )
-        data.biz_scenario = st.text_area(
-            "Briefly describe the situation or deal you want to assess",
-            value=data.get("biz_scenario", ""),
-            height=150,
-            help="Example: We are a fashion brand buying fabric from a new supplier in another country."
-        )
-
-        colA, colB = st.columns(2)
-        with colA:
-            st.button("← Back to assessments", on_click=go_to_assessment_select, key="biz_back1")
-        with colB:
-            disabled = not data.biz_scenario.strip()
-            if st.button("Generate Assessment →", disabled=disabled, key="biz_next1"):
-                data.biz_assessment = generate_business_assessment_structure(
-                    data.biz_scenario,
-                    data.biz_sector,
-                    data.biz_counterpart
-                )
-                data.biz_step = 2
-                st.rerun()
-
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    # STEP 2 – Answer dynamically generated questions
-    elif data.biz_step == 2:
-        if not data.biz_assessment:
-            st.warning("No assessment generated yet. Please go back and describe your situation.")
-            if st.button("← Back", on_click=go_to_assessment_select, key="biz_back_noassess"):
-                return
-
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
-        st.markdown("#### Answer the questions below to assess your risk.")
-
-        answers = data.biz_answers
-
-        for section in data.biz_assessment["sections"]:
-            st.markdown(f"**{section['name']}**")
-            st.caption(section["description"])
-            for q in section["questions"]:
-                qid = q["id"]
-                qtype = q["type"]
-                default_val = answers.get(qid, "")
-                if qtype == "text":
-                    val = st.text_input(q["text"], value=default_val, key=f"biz_{qid}")
-                elif qtype == "text_long":
-                    val = st.text_area(q["text"], value=default_val, key=f"biz_{qid}")
-                elif qtype == "select":
-                    options = q["options"]
-                    idx = options.index(default_val) if default_val in options else 0
-                    val = st.selectbox(q["text"], options, index=idx, key=f"biz_{qid}")
-                else:
-                    val = st.text_input(q["text"], value=default_val, key=f"biz_{qid}")
-                answers[qid] = val
-                st.write("")
-            st.markdown("---")
-
-        colA, colB = st.columns(2)
-        with colA:
-            if st.button("← Back", key="biz_back2"):
-                data.biz_step = 1
-                st.rerun()
-        with colB:
-            if st.button("Calculate Risk →", key="biz_next2"):
-                data.biz_answers = answers
-                data.biz_step = 3
-                st.rerun()
-
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    # STEP 3 – Risk calculation & summary
-    elif data.biz_step == 3:
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
-        st.markdown("### Business Risk Results")
-
-        assess = data.biz_assessment
-        answers = data.biz_answers
-
-        total_score = 0
-        max_score = 0
-
-        for section in assess["sections"]:
-            for q in section["questions"]:
-                if not q["scoring_map"]:
-                    continue
-                ans = answers.get(q["id"])
-                if ans not in q["scoring_map"]:
-                    continue
-                w = q["weight"]
-                s_val = q["scoring_map"][ans]
-                max_s = max(q["scoring_map"].values())
-                total_score += w * s_val
-                max_score += w * max_s
-
-        if max_score > 0:
-            risk_pct = (total_score / max_score) * 100.0
-        else:
-            risk_pct = 0.0
-
-        if risk_pct >= 66:
-            level, cls = "High Risk", "high"
-        elif risk_pct >= 40:
-            level, cls = "Medium Risk", "medium"
-        else:
-            level, cls = "Low Risk", "low"
-
-        st.markdown(f"<span class='badge {cls}'>{level}</span>", unsafe_allow_html=True)
-        st.metric("Overall Business Risk Score", f"{risk_pct:.1f}%")
-
-        st.subheader("Summary")
-        st.write(f"**Business Name:** {data.get('biz_name', '')}")
-        st.write(f"**Sector:** {assess.get('sector', '')}")
-        st.write(f"**Counterparty Type:** {assess.get('counterpart', '')}")
-        st.write("**Scenario Description:**")
-        st.write(assess.get("description", ""))
-
-        st.subheader("Key Risk Areas")
-        for section in assess["sections"]:
-            st.markdown(f"**{section['name']}**")
-            for q in section["questions"]:
-                ans = answers.get(q["id"], "(no answer)")
-                st.write(f"- {q['text']}")
-                st.write(f"  → **Your answer:** {ans}")
-            st.write("")
-
-        colA, colB = st.columns(2)
-        with colA:
-            if st.button("← Back", key="biz_back3"):
-                data.biz_step = 2
-                st.rerun()
-        with colB:
-            if st.button("Start Over", key="biz_reset"):
-                reset_all()
-                st.rerun()
-
-        st.markdown("</div>", unsafe_allow_html=True)
 
 # ---------------------------------------------------
 # HOME CARE RISK ASSESSMENT FLOW
@@ -541,21 +383,47 @@ def run_home_care_risk_assessment():
     st.markdown(f"### Home Care Risk Assessment — Step {data.step} of {TOTAL_STEPS} · {STEPS[data.step]}")
     st.progress(data.step / TOTAL_STEPS)
 
-    # Shared upload box (practice docs only)
-    render_upload_box()
-    st.markdown("---")
-
-    # STEP 1 – Client Info
+    # STEP 1 – Client Info + PDF Upload
     if data.step == 1:
         st.markdown("<div class='card'>", unsafe_allow_html=True)
-        data.name = st.text_input("Client Name (required)", value=data.get("name", ""))
+
+        col1, col2 = st.columns(2)
+        with col1:
+            data.first_name = st.text_input("First Name (required)", value=data.get("first_name", ""))
+        with col2:
+            data.last_name = st.text_input("Last Name (required)", value=data.get("last_name", ""))
+
+        data.dob = st.date_input(
+            "Date of Birth (required)",
+            value=data.get("dob", datetime(2000, 1, 1)),
+        )
+
         data.client_id = st.text_input("Client ID (optional)", value=data.get("client_id", ""))
+
+        st.markdown("**Upload Client PDF** (e.g., prior records, referral, or intake form)")
+        uploaded_file = st.file_uploader(
+            "Please upload a PDF labeled like: 'Last name, First name - DOB'",
+            type=["pdf"]
+        )
+        if uploaded_file is not None:
+            data.uploaded_pdf_bytes = uploaded_file.getvalue()
+            data.uploaded_pdf_name = uploaded_file.name
+            st.success(f"Uploaded: {uploaded_file.name}")
+
+        first_ok = bool(data.first_name.strip())
+        last_ok = bool(data.last_name.strip())
+        dob_ok = data.dob is not None
 
         colA, colB = st.columns(2)
         with colA:
-            st.button("← Back to assessments", on_click=go_to_assessment_select, key="hc_back_assess")
+            st.button("Reset", on_click=reset_flow, key="reset1")
         with colB:
-            st.button("Next →", on_click=next_step, disabled=(not data.name.strip()), key="next1")
+            st.button(
+                "Next →",
+                on_click=next_step,
+                disabled=not (first_ok and last_ok and dob_ok),
+                key="next1",
+            )
 
         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -658,9 +526,7 @@ def run_home_care_risk_assessment():
                             "frequency": m_freq.strip()
                         }
                     )
-                    # Do NOT try to clear widget keys programmatically; Streamlit Cloud
-                    # can error if we mutate widget-bound state directly.
-                    # Users can overwrite values manually if they wish.
+                    # Do not directly mutate widget keys; user can overwrite manually.
 
             st.markdown("### Current Medications")
 
@@ -770,7 +636,7 @@ def run_home_care_risk_assessment():
 
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # STEP 6 – Review & Score
+    # STEP 6 – Review & Submit
     elif data.step == 6:
         st.markdown("<div class='card'>", unsafe_allow_html=True)
 
@@ -811,7 +677,8 @@ def run_home_care_risk_assessment():
 
         st.subheader("Client Summary")
 
-        st.write(f"**Client Name:** {data.name}")
+        st.write(f"**Client Name:** {data.first_name} {data.last_name}")
+        st.write(f"**Date of Birth:** {data.dob.strftime('%Y-%m-%d') if data.dob else ''}")
         st.write(f"**Client ID:** {data.client_id}")
         st.write(f"**Age:** {age}")
         st.write(f"**Height:** {height} inches")
@@ -825,7 +692,7 @@ def run_home_care_risk_assessment():
                 for idx_m, med in enumerate(data.med_list, start=1):
                     st.write(f"**Medication {idx_m}:**")
                     st.write(f" • Name: {med['name']}")
-                    st.write(f" • Dosage: {med['dosage']}") 
+                    st.write(f" • Dosage: {med['dosage']}")
                     st.write(f" • Frequency: {med['frequency']}")
             else:
                 st.write("No medications entered.")
@@ -834,85 +701,36 @@ def run_home_care_risk_assessment():
         if data.adult_present == "Yes":
             st.write(f"**Adult #1:** {data.adult1} ({data.rel1})")
             if data.adult2.strip():
-                st.write(f"**Adult #2:** {data.adult2} ({data.rel2})")
+                rel2 = f" ({data.rel2})" if data.rel2 else ""
+                st.write(f"**Adult #2:** {data.adult2}{rel2}")
         st.write(f"**Additional Notes:** {data.get('notes', '')}")
 
-        colA, colB = st.columns(2)
+        if not FPDF_AVAILABLE:
+            st.error("FPDF is not installed. Please run 'pip install fpdf2' to enable PDF generation.")
+        if data.uploaded_pdf_bytes is None:
+            st.warning("No client PDF uploaded. Final document will include only the assessment summary.")
+
+        colA, colB, colC = st.columns([1, 1, 2])
         with colA:
             st.button("← Back", on_click=prev_step, key="back6")
         with colB:
-            st.button("Start Over", on_click=reset_all, key="reset6")
+            if st.button("Start Over", on_click=reset_flow, key="reset6"):
+                pass
+        with colC:
+            submit_disabled = not FPDF_AVAILABLE
+            if st.button("Submit & Generate PDF", disabled=submit_disabled, key="submit_final"):
+                try:
+                    final_path, msg = build_final_pdf(data, score, level)
+                    st.success("Assessment submitted and PDF generated.")
+                    st.info(msg)
+                except Exception as e:
+                    st.error(f"Something went wrong while generating the PDF: {e}")
 
         st.markdown("</div>", unsafe_allow_html=True)
 
+
 # ---------------------------------------------------
-# TOP LEVEL ROUTER
+# RUN APP
 # ---------------------------------------------------
 
-if data.app_stage == "industry_select":
-    st.markdown("<div class='card'>", unsafe_allow_html=True)
-    st.markdown("## Select an Industry")
-    st.markdown("Choose the industry to see available assessments.")
-
-    industries = [
-        ("Healthcare", "🩺"),
-        ("Home Care", "🏡"),
-        ("Behavioral Health", "🧠"),
-        ("Education", "📚"),
-        ("Child Services", "👶"),
-        ("Housing", "🏠"),
-        ("Business", "🏢"),
-    ]
-
-    rows = [industries[:3], industries[3:6], industries[6:]]
-    for row in rows:
-        if not row:
-            continue
-        cols = st.columns(len(row))
-        for (label, icon), col in zip(row, cols):
-            with col:
-                if st.button(f"{icon} {label}", key=f"industry_{label}"):
-                    st.session_state.industry = label
-                    st.session_state.app_stage = "assessment_select"
-                    st.session_state.assessment = None
-                    st.session_state.step = 1
-                    st.session_state.biz_step = 1
-
-    st.markdown("</div>", unsafe_allow_html=True)
-
-elif data.app_stage == "assessment_select":
-    st.markdown("<div class='card'>", unsafe_allow_html=True)
-    st.markdown(f"## {data.industry} — Assessments")
-
-    if data.industry == "Home Care":
-        st.markdown("Select an assessment to begin:")
-
-        if st.button("🏡 Home Care Risk Assessment", key="hc_risk_assess"):
-            start_home_care_assessment()
-
-        st.caption("More Home Care assessments coming soon.")
-
-    elif data.industry == "Business":
-        st.markdown("Select an assessment to begin:")
-
-        if st.button("📊 AI Business Risk Assessment", key="biz_risk_assess"):
-            start_business_assessment()
-
-        st.caption("This assessment dynamically adapts to your business scenario.")
-
-    else:
-        st.markdown("Assessments for this industry are not configured yet.")
-        st.caption("Currently, Home Care and Business assessments are active.")
-
-    st.button("← Back to industries", on_click=go_to_industries, key="back_to_industries")
-
-    st.markdown("</div>", unsafe_allow_html=True)
-
-elif data.app_stage == "assessment_run":
-    if data.assessment == "home_care_risk":
-        run_home_care_risk_assessment()
-    elif data.assessment == "business_ai_risk":
-        run_business_risk_assessment()
-    else:
-        st.write("Selected assessment is not available yet.")
-
+run_home_care_risk_assessment()
