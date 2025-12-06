@@ -94,12 +94,12 @@ data = st.session_state
 
 # Steps for Home Care assessment
 STEPS = {
-    1:"Client Info",
-    2:"Demographics",
-    3:"Medical History",
-    4:"Medications",
-    5:"Mobility & Safety",
-    6:"Review"
+    1: "Client Info",
+    2: "Demographics",
+    3: "Medical History",
+    4: "Medications",
+    5: "Mobility & Safety",
+    6: "Review"
 }
 TOTAL_STEPS = len(STEPS)
 
@@ -344,36 +344,38 @@ def run_business_risk_assessment():
         data.biz_step = 1
 
     st.markdown(f"### Business Risk Assessment (AI-style) — Step {data.biz_step} of 3")
-    st.progress(data.biz_step/3)
+    st.progress(data.biz_step / 3)
 
     # STEP 1 – Scenario intake
     if data.biz_step == 1:
         st.markdown("<div class='card'>", unsafe_allow_html=True)
 
-        data.biz_name = st.text_input("Business name", value=data.get("biz_name",""))
-        sectors = ["Fashion / Apparel","Manufacturing","Technology / Software","Retail / E-commerce",
-                   "Logistics / Transport","Other"]
+        data.biz_name = st.text_input("Business name", value=data.get("biz_name", ""))
+        sectors = [
+            "Fashion / Apparel", "Manufacturing", "Technology / Software",
+            "Retail / E-commerce", "Logistics / Transport", "Other"
+        ]
         data.biz_sector = st.selectbox(
             "Primary sector",
             sectors,
-            index= sectors.index(data.get("biz_sector","Fashion / Apparel"))
+            index=sectors.index(data.get("biz_sector", "Fashion / Apparel"))
             if data.get("biz_sector") in sectors else 0
         )
-        counterparts = ["Supplier","Customer","Partner","Investor","Other"]
+        counterparts = ["Supplier", "Customer", "Partner", "Investor", "Other"]
         data.biz_counterpart = st.selectbox(
             "Counterparty type",
             counterparts,
-            index= counterparts.index(data.get("biz_counterpart","Supplier"))
+            index=counterparts.index(data.get("biz_counterpart", "Supplier"))
             if data.get("biz_counterpart") in counterparts else 0
         )
         data.biz_scenario = st.text_area(
             "Briefly describe the situation or deal you want to assess",
-            value=data.get("biz_scenario",""),
+            value=data.get("biz_scenario", ""),
             height=150,
             help="Example: We are a fashion brand buying fabric from a new supplier in another country."
         )
 
-        colA,colB = st.columns(2)
+        colA, colB = st.columns(2)
         with colA:
             st.button("← Back to assessments", on_click=go_to_assessment_select, key="biz_back1")
         with colB:
@@ -407,7 +409,7 @@ def run_business_risk_assessment():
             for q in section["questions"]:
                 qid = q["id"]
                 qtype = q["type"]
-                default_val = answers.get(qid,"")
+                default_val = answers.get(qid, "")
                 if qtype == "text":
                     val = st.text_input(q["text"], value=default_val, key=f"biz_{qid}")
                 elif qtype == "text_long":
@@ -422,7 +424,7 @@ def run_business_risk_assessment():
                 st.write("")
             st.markdown("---")
 
-        colA,colB = st.columns(2)
+        colA, colB = st.columns(2)
         with colA:
             if st.button("← Back", key="biz_back2"):
                 data.biz_step = 1
@@ -465,32 +467,32 @@ def run_business_risk_assessment():
             risk_pct = 0.0
 
         if risk_pct >= 66:
-            level, cls = "High Risk","high"
+            level, cls = "High Risk", "high"
         elif risk_pct >= 40:
-            level, cls = "Medium Risk","medium"
+            level, cls = "Medium Risk", "medium"
         else:
-            level, cls = "Low Risk","low"
+            level, cls = "Low Risk", "low"
 
         st.markdown(f"<span class='badge {cls}'>{level}</span>", unsafe_allow_html=True)
         st.metric("Overall Business Risk Score", f"{risk_pct:.1f}%")
 
         st.subheader("Summary")
-        st.write(f"**Business Name:** {data.get('biz_name','')}")
-        st.write(f"**Sector:** {assess.get('sector','')}")
-        st.write(f"**Counterparty Type:** {assess.get('counterpart','')}")
+        st.write(f"**Business Name:** {data.get('biz_name', '')}")
+        st.write(f"**Sector:** {assess.get('sector', '')}")
+        st.write(f"**Counterparty Type:** {assess.get('counterpart', '')}")
         st.write("**Scenario Description:**")
-        st.write(assess.get("description",""))
+        st.write(assess.get("description", ""))
 
         st.subheader("Key Risk Areas")
         for section in assess["sections"]:
             st.markdown(f"**{section['name']}**")
             for q in section["questions"]:
-                ans = answers.get(q["id"],"(no answer)")
+                ans = answers.get(q["id"], "(no answer)")
                 st.write(f"- {q['text']}")
                 st.write(f"  → **Your answer:** {ans}")
             st.write("")
 
-        colA,colB = st.columns(2)
+        colA, colB = st.columns(2)
         with colA:
             if st.button("← Back", key="biz_back3"):
                 data.biz_step = 2
@@ -515,8 +517,8 @@ def run_home_care_risk_assessment():
     # STEP 1 – Client Info
     if data.step == 1:
         st.markdown("<div class='card'>", unsafe_allow_html=True)
-        data.name = st.text_input("Client Name (required)", value=data.get("name",""))
-        data.client_id = st.text_input("Client ID (optional)", value=data.get("client_id",""))
+        data.name = st.text_input("Client Name (required)", value=data.get("name", ""))
+        data.client_id = st.text_input("Client ID (optional)", value=data.get("client_id", ""))
 
         colA, colB = st.columns(2)
         with colA:
@@ -530,15 +532,15 @@ def run_home_care_risk_assessment():
     elif data.step == 2:
         st.markdown("<div class='card'>", unsafe_allow_html=True)
 
-        data.age = st.text_input("Age", value=data.get("age",""))
-        data.weight = st.text_input("Weight (lbs)", value=data.get("weight",""))
+        data.age = st.text_input("Age", value=data.get("age", ""))
+        data.weight = st.text_input("Weight (lbs)", value=data.get("weight", ""))
 
         st.markdown("**Height**")
         col1, col2 = st.columns(2)
         with col1:
-            data.height_feet = st.text_input("Feet", value=data.get("height_feet",""))
+            data.height_feet = st.text_input("Feet", value=data.get("height_feet", ""))
         with col2:
-            data.height_inches = st.text_input("Inches (0–11)", value=data.get("height_inches",""))
+            data.height_inches = st.text_input("Inches (0–11)", value=data.get("height_inches", ""))
 
         def demo_valid():
             try:
@@ -547,7 +549,7 @@ def run_home_care_risk_assessment():
                 ft = int(data.height_feet)
                 inch = int(data.height_inches)
                 return age > 0 and weight > 0 and ft >= 0 and 0 <= inch <= 11
-            except:
+            except Exception:
                 return False
 
         colA, colB = st.columns(2)
@@ -564,9 +566,9 @@ def run_home_care_risk_assessment():
 
         data.seizures = st.radio(
             "History of Seizures?",
-            ["No","Yes"],
+            ["No", "Yes"],
             horizontal=True,
-            index=0 if data.get("seizures","No")=="No" else 1
+            index=0 if data.get("seizures", "No") == "No" else 1
         )
 
         seizure_ok = True
@@ -580,7 +582,7 @@ def run_home_care_risk_assessment():
                 "Focal",
                 "Absence"
             ]
-            current = data.get("seizure_type","Select seizure type...")
+            current = data.get("seizure_type", "Select seizure type...")
             if current not in seizure_types:
                 current = "Select seizure type..."
             idx = seizure_types.index(current)
@@ -602,10 +604,12 @@ def run_home_care_risk_assessment():
 
         data.medications = st.radio(
             "Does the client take medication?",
-            ["No","Yes"],
+            ["No", "Yes"],
             horizontal=True,
-            index=0 if data.get("medications","No")=="No" else 1
+            index=0 if data.get("medications", "No") == "No" else 1
         )
+
+        meds_ok = True
 
         if data.medications == "Yes":
             with st.expander("Add Medication"):
@@ -613,23 +617,30 @@ def run_home_care_risk_assessment():
                 m_dose = st.text_input("Dosage", key="new_med_dose")
                 m_freq = st.text_input("Frequency", key="new_med_freq")
 
-                can_add = all([m_name.strip(), m_dose.strip(), m_freq.strip()])
+                can_add = bool(m_name.strip() and m_dose.strip() and m_freq.strip())
 
                 if st.button("Add Medication", disabled=not can_add, key="add_med"):
                     data.med_list.append(
-                        {"name": m_name.strip(), "dosage": m_dose.strip(), "frequency": m_freq.strip()}
+                        {
+                            "name": m_name.strip(),
+                            "dosage": m_dose.strip(),
+                            "frequency": m_freq.strip()
+                        }
                     )
-                    st.session_state.update({
-    "new_med_name": "",
-    "new_med_dose": "",
-    "new_med_freq": ""
-})
-st.rerun()
 
+                    st.session_state.update({
+                        "new_med_name": "",
+                        "new_med_dose": "",
+                        "new_med_freq": ""
+                    })
+
+                    st.rerun()
 
             st.markdown("### Current Medications")
+
             if not data.med_list:
                 st.caption("No medications added yet.")
+                meds_ok = False
             else:
                 for i, med in enumerate(data.med_list):
                     cols = st.columns([3, 2, 2, 1])
@@ -657,7 +668,7 @@ st.rerun()
                         data.med_list.pop(i)
                         st.rerun()
 
-            meds_ok = True if data.med_list else False
+                meds_ok = True
         else:
             meds_ok = True
 
@@ -694,26 +705,26 @@ st.rerun()
 
         data.adult_present = st.radio(
             "Will an adult be present during care?",
-            ["No","Yes"],
+            ["No", "Yes"],
             horizontal=True,
-            index=0 if data.get("adult_present","No")=="No" else 1
+            index=0 if data.get("adult_present", "No") == "No" else 1
         )
 
         adults_ok = True
 
-        data.adult1 = data.get("adult1","")
-        data.rel1 = data.get("rel1","")
-        data.adult2 = data.get("adult2","")
-        data.rel2 = data.get("rel2","")
+        data.adult1 = data.get("adult1", "")
+        data.rel1 = data.get("rel1", "")
+        data.adult2 = data.get("adult2", "")
+        data.rel2 = data.get("rel2", "")
 
         if data.adult_present == "Yes":
-            col1,col2 = st.columns(2)
+            col1, col2 = st.columns(2)
             with col1:
                 data.adult1 = st.text_input("Adult #1 Name", value=data.adult1)
             with col2:
                 data.rel1 = st.text_input("Relationship (required)", value=data.rel1)
 
-            col3,col4 = st.columns(2)
+            col3, col4 = st.columns(2)
             with col3:
                 data.adult2 = st.text_input("Adult #2 Name", value=data.adult2)
             with col4:
@@ -723,7 +734,7 @@ st.rerun()
             if data.adult2.strip() and not data.rel2.strip():
                 adults_ok = False
 
-        data.notes = st.text_area("Additional medical notes", value=data.get("notes",""))
+        data.notes = st.text_area("Additional medical notes", value=data.get("notes", ""))
 
         colA, colB = st.columns(2)
         with colA:
@@ -792,13 +803,13 @@ st.rerun()
                     st.write(f" • Frequency: {med['frequency']}")
             else:
                 st.write("No medications entered.")
-        st.write(f"**Mobility Level:** {data.get('mobility_label','')}")
+        st.write(f"**Mobility Level:** {data.get('mobility_label', '')}")
         st.write(f"**Adult Present During Care:** {data.adult_present}")
         if data.adult_present == "Yes":
             st.write(f"**Adult #1:** {data.adult1} ({data.rel1})")
             if data.adult2.strip():
                 st.write(f"**Adult #2:** {data.adult2} ({data.rel2})")
-        st.write(f"**Additional Notes:** {data.get('notes','')}")
+        st.write(f"**Additional Notes:** {data.get('notes', '')}")
 
         colA, colB = st.columns(2)
         with colA:
@@ -878,4 +889,3 @@ elif data.app_stage == "assessment_run":
         run_business_risk_assessment()
     else:
         st.write("Selected assessment is not available yet.")
-
