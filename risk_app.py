@@ -1,10 +1,9 @@
-# app.py - Home Care Comfort Portal (Fixed with Admin Storage & Extra Info Spots)
 import streamlit as st
 
 # Page Config
 st.set_page_config(
     page_title="Home Care Comfort Portal",
-    page_icon="🏠",
+    page_icon="house",
     layout="centered",
     initial_sidebar_state="collapsed"
 )
@@ -32,8 +31,10 @@ st.markdown("""
     .assessment-card {background: white; padding: 2.5rem; border-radius: 20px;
         box-shadow: 0 10px 30px rgba(0,0,0,0.1); max-width: 700px; margin: 2rem auto;}
     .step-header {font-size: 1.1rem; color: #636e72; margin-bottom: 1.5rem; text-align: center;}
-    .next-btn {background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);}
-    .detail-box {background: #f9f9f9; padding: 1rem; border-radius: 10px; margin-top: 0.5rem;}
+    .detail-box {
+        background: #f8f9fc; padding: 1.2rem; border-radius: 12px; 
+        border: 1px solid #e0e0e0; margin-top: 0.8rem; margin-bottom: 1.5rem;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -59,17 +60,17 @@ data = st.session_state.data
 # HOME PAGE
 def home():
     st.markdown('<div class="portal-card">', unsafe_allow_html=True)
-    st.markdown('<h1 class="portal-title">🏠 Home Care Comfort Portal</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="portal-title">Home Care Comfort Portal</h1>', unsafe_allow_html=True)
     st.markdown('<p class="portal-subtitle">Secure, professional assessment and coordination for home care services.</p>', unsafe_allow_html=True)
 
     c1, c2 = st.columns(2, gap="large")
     with c1:
-        if st.button("👤 Client Assessment", key="client", use_container_width=True):
+        if st.button("Client Assessment", key="client", use_container_width=True):
             st.session_state.page = "assessment"
             st.session_state.step = 1
             st.rerun()
     with c2:
-        if st.button("🛡️ Admin Dashboard", key="admin", use_container_width=True):
+        if st.button("Admin Dashboard", key="admin", use_container_width=True):
             st.session_state.page = "admin"
             st.rerun()
 
@@ -90,7 +91,6 @@ def assessment():
     st.markdown("<h2 style='text-align:center; color:#2c3e50;'>Client Risk Assessment</h2>", unsafe_allow_html=True)
     st.markdown("<p style='text-align:center; color:#636e72; margin-bottom:2rem;'>Please complete all three steps</p>", unsafe_allow_html=True)
     
-    # Progress bar
     progress = {"1": 0.33, "2": 0.66, "3": 1.0}
     st.progress(progress[str(st.session_state.step)])
 
@@ -119,7 +119,7 @@ def assessment():
             
             colb, coln = st.columns(2)
             with colb:
-                if st.form_submit_button("← Back"):
+                if st.form_submit_button("Back"):
                     st.session_state.step = 1
                     st.rerun()
             with coln:
@@ -138,86 +138,69 @@ def assessment():
             data["diagnoses"] = st.radio("Any medical diagnoses?", ["No", "Yes"], horizontal=True)
             if data["diagnoses"] == "Yes":
                 st.markdown('<div class="detail-box">', unsafe_allow_html=True)
-                data["diagnoses_details"] = st.text_area("Additional Details: Please list all diagnoses", value=data["diagnoses_details"], height=120)
+                data["diagnoses_details"] = st.text_area("Please list all diagnoses", value=data["diagnoses_details"], height=100)
                 st.markdown('</div>', unsafe_allow_html=True)
 
             data["seizures"] = st.radio("History of seizures?", ["No", "Yes"], horizontal=True)
             if data["seizures"] == "Yes":
                 st.markdown('<div class="detail-box">', unsafe_allow_html=True)
-                data["seizure_details"] = st.text_area("Additional Details: Please describe seizure type and frequency", value=data["seizure_details"], height=120)
+                data["seizure_details"] = st.text_area("Please describe seizure type and frequency", value=data["seizure_details"], height=100)
                 st.markdown('</div>', unsafe_allow_html=True)
 
             data["medications"] = st.radio("Currently taking medications?", ["No", "Yes"], horizontal=True)
             if data["medications"] == "Yes":
                 st.markdown('<div class="detail-box">', unsafe_allow_html=True)
-                data["medication_details"] = st.text_area("Additional Details: Please list medications and dosages", value=data["medication_details"], height=150)
+                data["medication_details"] = st.text_area("Please list medications and dosages", value=data["medication_details"], height=130)
                 st.markdown('</div>', unsafe_allow_html=True)
 
             data["assist_medical"] = st.radio("Will provider be expected to assist with any medical needs?", ["No", "Yes"], horizontal=True)
 
             colb, cols = st.columns(2)
             with colb:
-                if st.form_submit_button("← Back"):
+                if st.form_submit_button("Back"):
                     st.session_state.step = 2
                     st.rerun()
             with cols:
                 if st.form_submit_button("Submit Assessment", type="primary", use_container_width=True):
-                    # Save to admin
+                    # Save and go directly to Admin
                     st.session_state.assessments.append(data.copy())
-                    st.success("Assessment submitted successfully and sent to Admin!")
+                    st.success("Assessment submitted successfully!")
                     st.balloons()
-                    st.session_state.page = "thank_you"
+                    # Reset form for next client
+                    for key in data:
+                        data[key] = ""
+                    data.update({"diagnoses":"No","seizures":"No","medications":"No","assist_medical":"No"})
+                    # Automatically go to Admin Dashboard
+                    st.session_state.page = "admin"
                     st.rerun()
 
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# THANK YOU PAGE
-def thank_you():
-    st.markdown('<div class="assessment-card">', unsafe_allow_html=True)
-    st.markdown("<h2 style='text-align:center; color:#2c3e50;'>Thank You!</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align:center; font-size:1.2rem;'>Your assessment has been submitted successfully.</p>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align:center;'>A care coordinator will review your information shortly.</p>", unsafe_allow_html=True)
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("← Return to Home", use_container_width=True):
-            st.session_state.page = "home"
-            st.session_state.step = 1
-            for key in data:
-                data[key] = ""
-            data.update({"diagnoses":"No","seizures":"No","medications":"No","assist_medical":"No"})
-            st.rerun()
-    with col2:
-        if st.button("View Admin Dashboard", use_container_width=True):
-            st.session_state.page = "admin"
-            st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
 # ADMIN PAGE
 def admin():
     st.markdown('<div class="assessment-card">', unsafe_allow_html=True)
     st.markdown("<h2 style='text-align:center; color:#2c3e50;'>Admin Dashboard</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align:center; color:#636e72;'>Completed Assessments</p>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align:center; color:#636e72; margin-bottom:2rem;'>All Completed Assessments</p>", unsafe_allow_html=True)
     
     if not st.session_state.assessments:
-        st.info("No assessments submitted yet.")
+        st.info("No assessments have been submitted yet.")
     else:
-        for i, ass in enumerate(st.session_state.assessments):
-            with st.expander(f"Assessment #{i+1} - {ass['first_name']} {ass['last_name']} (ID: {ass['client_id']})"):
-                st.write("**Age:**", ass['age'])
-                st.write("**Height:**", ass['height'])
-                st.write("**Weight:**", ass['weight'])
-                st.write("**Diagnoses:**", ass['diagnoses'])
-                if ass['diagnoses'] == "Yes":
-                    st.write("Details:", ass['diagnoses_details'])
-                st.write("**Seizures:**", ass['seizures'])
-                if ass['seizures'] == "Yes":
-                    st.write("Details:", ass['seizure_details'])
-                st.write("**Medications:**", ass['medications'])
-                if ass['medications'] == "Yes":
-                    st.write("Details:", ass['medication_details'])
-                st.write("**Assist with Medical Needs:**", ass['assist_medical'])
+        for i, ass in enumerate(reversed(st.session_state.assessments)):  # newest first
+            name = f"{ass['first_name']} {ass['last_name']}"
+            with st.expander(f"{name} • Client ID: {ass['client_id']} • Submitted", expanded=True):
+                st.write(f"**Age:** {ass['age']} | **Height:** {ass['height']} | **Weight:** {ass['weight']} lbs")
+                st.write(f"**Diagnoses:** {ass['diagnoses']}")
+                if ass['diagnoses'] == "Yes" and ass['diagnoses_details']:
+                    st.write("→ " + ass['diagnoses_details'])
+                st.write(f"**Seizures:** {ass['seizures']}")
+                if ass['seizures'] == "Yes" and ass['seizure_details']:
+                    st.write("→ " + ass['seizure_details'])
+                st.write(f"**Medications:** {ass['medications']}")
+                if ass['medications'] == "Yes" and ass['medication_details']:
+                    st.write("→ " + ass['medication_details'])
+                st.write(f"**Assist with Medical Needs:** {ass['assist_medical']}")
 
-    if st.button("← Back to Home"):
+    if st.button("Back to Home"):
         st.session_state.page = "home"
         st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
@@ -227,7 +210,5 @@ if st.session_state.page == "home":
     home()
 elif st.session_state.page == "assessment":
     assessment()
-elif st.session_state.page == "thank_you":
-    thank_you()
 elif st.session_state.page == "admin":
     admin()
