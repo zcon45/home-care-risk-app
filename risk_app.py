@@ -1,426 +1,329 @@
-# ================================
-# HOME CARE RISK ASSESSMENT APP
-# FULL STABLE RELEASE — PDF SAFE
-# ================================
-
 import streamlit as st
-from pathlib import Path
 from datetime import datetime
+from io import BytesIO
+from fpdf import FPDF
+import base64
 
-# -------------------------------
-# OPTIONAL DEPENDENCIES
-# -------------------------------
+# ===============================
+# CONFIG & STYLE
+# ===============================
+st.set_page_config(page_title="Home Care Comfort Portal", layout="centered", page_icon="house")
 
-try:
-    from fpdf import FPDF
-    FPDF_AVAILABLE = True
-except:
-    FPDF_AVAILABLE = False
-
-try:
-    from PyPDF2 import PdfReader, PdfWriter
-    PYPDF2_AVAILABLE = True
-except:
-    PYPDF2_AVAILABLE = False
-
-
-# -------------------------------
-# SAVE LOCATION (PRACTICE ONLY)
-# -------------------------------
-
-BASE_SAVE_PATH = Path(
-    r"C:\Users\zach_\OneDrive\Documents\Personal Risk Assessment Project\Practice Assessments"
-)
-
-BASE_SAVE_PATH.mkdir(parents=True, exist_ok=True)
-
-
-# -------------------------------
-# TEXT SAFETY FOR PDF
-# -------------------------------
-
-def wrap_pdf_text(txt: str) -> str:
-    """
-    Converts problem unicode to safe ASCII so
-    FPDF never crashes.
-    """
-    replacements = {
-        "–": "-",
-        "—": "-",
-        "’": "'",
-        "“": '"',
-        "”": '"',
-        "•": "-",
-        "\u00A0": " "
+st.markdown("""
+<style>
+    .main {background-color: #f8fbfd;}
+    .card {
+        background: white;
+        padding: 2rem;
+        border-radius: 16px;
+        box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+        margin: 1rem 0;
     }
+    .stButton>button {
+        background: #2563eb;
+        color: white;
+        border-radius: 12px;
+        height: 3em;
+        font-weight: 600;
+    }
+    .badge {
+        padding: 8px 20px;
+        border-radius: 50px;
+        font-weight: bold;
+        display: inline-block;
+    }
+    .low {background:#10b981; color:white;}
+    .medium {background:#f59e0b; color:white;}
+    .high {background:#ef4444; color:white;}
+    h1, h2, h3 {color: #1e293b;}
+    .step-indicator {
+        font-size: 1.1rem;
+        color: #64748b;
+        margin-bottom: 1.5rem;
+    }
+</style>
+""", unsafe_allow_html=True)
 
-    for k, v in replacements.items():
-        txt = txt.replace(k, v)
+# ===============================
+# SESSION STATE INITIALIZATION
+# ===============================
+def init_session_state():
+    defaults = {
+        "page": "home",
+        "step": 1,
+        "assessments": [],
+        "med_list": [],
+        "uploaded_files": [],
+        "ai_analysis": "",
+        "first_name": "", "last_name": "", "dob": datetime(2000,1,1),
+        "age": "", "weight": "", "height_ft": "", "height_in": "",
+        "seizures": "No", "seizure_type": "", "medications": "No",
+        "mobility_label": "Walks independently", "adult_present": "No",
+        "adult1": "", "rel1": "", "adult2": "", "rel2": "", "notes": ""
+    }
+    for k, v in defaults.items():
+        if k not in st.session_state:
+            st.session_state[k] = v
 
-    return txt.encode("latin-1", errors="ignore").decode("latin-1")
+init_session_state()
 
+# ===============================
+# PDF HELPER
+# ===============================
+def safe_text(text):
+    return str(text).encode("latin-1", "ignore").decode("latin-1")
 
-# -------------------------------
-# SAVE UPLOADED PDF
-# -------------------------------
-
-def save_uploaded_file(file_bytes, original_name):
-    t = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    p = Path(original_name)
-    name = f"{p.stem}_{t}{p.suffix}"
-    out = BASE_SAVE_PATH / name
-
-    with open(out, "wb") as f:
-        f.write(file_bytes)
-
-    return out
-
-
-# -------------------------------
-# AI SUMMARY BUILDER
-# -------------------------------
-
-def build_ai_style_summary(data, score, level):
-
-    s = []
-
-    s.append(f"Overall risk assigned as {level.lower()} "
-             f"with score of {score:.1f}.")
-
-    age = int(data.get("age", 0) or 0)
-
-    if age >= 80:
-        s.append("Advanced age increases fall and complication risk.")
-    elif age >= 65:
-        s.append("Older adult status contributes to moderate baseline risk.")
-
-    if data.get("seizures") == "Yes":
-        s.append(f"History of seizures ({data.get('seizure_type','')}).")
-
-    if data.get("medications") == "Yes":
-        s.append("Medication use adds complexity of care and monitoring burden.")
-
-    s.append(f"Mobility documented as: {data.get('mobility_label','')}.")
-
-    if data.get("adult_present") == "Yes":
-        s.append("Adult supervision present.")
-    else:
-        s.append("No adult supervision available during care.")
-
-    if data.get("notes"):
-        s.append("Additional provider notes reviewed.")
-
-    s.append("This summary supports care planning but does not replace "
-             "professional judgment.")
-
-    return wrap_pdf_text("\n\n".join(s))
-
-
-# -------------------------------
-# SAFE PDF GENERATOR
-# -------------------------------
-
-def generate_summary_pdf(data, score, level, fullname, dob):
-
-    if not FPDF_AVAILABLE:
-        raise RuntimeError("FPDF missing. Run pip install fpdf2.")
-
+def create_combined_pdf(data, score, level, ai_analysis, file_names):
     pdf = FPDF()
-    pdf.set_auto_page_break(True, margin=12)
-    pdf.set_margins(12, 12, 12)
     pdf.add_page()
-    pdf.set_font("Arial", size=11)
-
-    def block(title, value):
-        pdf.set_font("Arial", "B", 11)
-        pdf.multi_cell(0, 6, wrap_pdf_text(str(title)))
-        pdf.set_font("Arial", size=11)
-        pdf.multi_cell(0, 6, wrap_pdf_text(str(value)))
-        pdf.ln(2)
-
-    pdf.set_font("Arial", "B", 16)
-    pdf.multi_cell(0, 10, "Home Care Risk Assessment Summary")
-    pdf.ln(3)
-
-    block("Client:", fullname)
-    block("DOB:", dob)
-    block("Client ID:", data.get("client_id", ""))
-    block("Risk Level:", level)
-    block("Risk Score:", f"{score:.1f}")
-
-    block("Age:", data.get("age",""))
-    block("Height:",
-          f"{data.get('height_feet','')} ft {data.get('height_inches','')} in")
-    block("Weight:", data.get("weight",""))
-
-    block("History of Seizures:", data.get("seizures",""))
-    if data.get("seizures")=="Yes":
-        block("Seizure Type:", data.get("seizure_type",""))
-
-    block("Medications:", data.get("medications",""))
-
-    meds = data.get("med_list", [])
-    if meds:
-        med_txt = []
-        for i,m in enumerate(meds,1):
-            med_txt.append(
-                f"{i}. {m['name']} - {m['dosage']} - {m['frequency']}"
-            )
-        block("Medication List:", "\n".join(med_txt))
-
-    block("Mobility:", data.get("mobility_label",""))
-    block("Adult Present:", data.get("adult_present",""))
-
-    if data.get("adult_present")=="Yes":
-        adults = []
-        if data.get("adult1"):
-            adults.append(f"{data['adult1']} ({data.get('rel1','')})")
-        if data.get("adult2"):
-            adults.append(f"{data['adult2']} ({data.get('rel2','')})")
-        block("Adults:", "\n".join(adults))
-
-    if data.get("notes"):
-        block("Notes:", data["notes"])
-
-    pdf.set_font("Arial","B",14)
-    pdf.multi_cell(0,8,"AI Summary")
-    pdf.ln(2)
-    pdf.set_font("Arial",11)
-    pdf.multi_cell(0,6, build_ai_style_summary(data, score, level))
-
-    t = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    fname = fullname.replace("/", "_")
-    out = BASE_SAVE_PATH / f"{fname}_summary_{t}.pdf"
-
-    pdf.output(str(out))
-    return out
-
-
-# -------------------------------
-# MERGE PDF
-# -------------------------------
-
-def merge_pdfs(uploaded, summary_pdf, final_path):
-
-    if not PYPDF2_AVAILABLE:
-        return summary_pdf
-
-    writer = PdfWriter()
-
-    if uploaded:
-        r1 = PdfReader(str(uploaded))
-        for p in r1.pages:
-            writer.add_page(p)
-
-    r2 = PdfReader(str(summary_pdf))
-    for p in r2.pages:
-        writer.add_page(p)
-
-    with open(final_path, "wb") as f:
-        writer.write(f)
-
-    return final_path
-
-
-# -------------------------------
-# FINAL PDF WORKFLOW
-# -------------------------------
-
-def build_final_pdf(data, score, level):
-
-    first = data["first_name"]
-    last = data["last_name"]
-    dob = data["dob"].strftime("%Y-%m-%d")
-
-    full = f"{first} {last}"
-
-    final_name = BASE_SAVE_PATH / f"{last}, {first} - {dob}.pdf"
-
-    original = None
-
-    if data.get("uploaded_pdf_bytes"):
-        original = save_uploaded_file(
-            data.uploaded_pdf_bytes,
-            data.uploaded_pdf_name
-        )
-
-    summary = generate_summary_pdf(data, score, level, full, dob)
-
-    if original and PYPDF2_AVAILABLE:
-        merge_pdfs(original, summary, final_name)
-        return final_name
-
-    summary.replace(final_name)
-    return final_name
-
-
-# -------------------------------
-# STREAMLIT CONFIG
-# -------------------------------
-
-st.set_page_config("Home Care Risk Assessment","centered")
-
-
-# -------------------------------
-# SESSION STATE
-# -------------------------------
-
-for k in ["step", "med_list", "uploaded_pdf_bytes", "uploaded_pdf_name"]:
-    if k not in st.session_state:
-        st.session_state[k] = [] if k=="med_list" else None
-
-if st.session_state.step is None:
-    st.session_state.step=1
-
-data = st.session_state
-
-
-# -------------------------------
-# STEPS
-# -------------------------------
-
-TOTAL=6
-STEP_NAMES = {
-    1:"Client Info",
-    2:"Demographics",
-    3:"Seizures",
-    4:"Medications",
-    5:"Mobility",
-    6:"Review"
-}
-
-def next_step(): data.step+=1
-def prev_step(): data.step-=1
-
-def reset():
-    st.session_state.clear()
-    st.session_state.step=1
-    st.session_state.med_list=[]
-
-
-# -------------------------------
-# UI LOOP
-# -------------------------------
-
-st.title("🏡 Home Care Risk Assessment")
-st.caption(f"Step {data.step} of {TOTAL} — {STEP_NAMES[data.step]}")
-st.progress(data.step/TOTAL)
-
-# ------------- STEP 1 -------------
-
-if data.step==1:
-
-    data.first_name = st.text_input("First Name")
-    data.last_name  = st.text_input("Last Name")
-    data.dob = st.date_input("DOB", datetime(2000,1,1))
-    data.client_id  = st.text_input("Client ID (optional)")
-
-    f = st.file_uploader("Upload Intake PDF", type="pdf")
-    if f:
-        data.uploaded_pdf_bytes = f.getvalue()
-        data.uploaded_pdf_name=f.name
-
-    if st.button("Next", disabled=not(data.first_name and data.last_name)):
-        next_step()
-
-# ------------- STEP 2 -------------
-
-elif data.step==2:
-
-    data.age = st.text_input("Age")
-    data.weight = st.text_input("Weight (lbs)")
-    data.height_feet = st.text_input("Height (feet)")
-    data.height_inches = st.text_input("Height (inches 0–11)")
-
-    if st.button("Back"): prev_step()
-    if st.button("Next"): next_step()
-
-# ------------- STEP 3 -------------
-
-elif data.step==3:
-
-    data.seizures = st.radio("History of seizures", ["No","Yes"], horizontal=True)
-    if data.seizures=="Yes":
-        data.seizure_type = st.selectbox(
-            "Seizure Type",
-            ["Tonic-clonic","Atonic","Tonic only","Myoclonic","Focal","Absence"]
-        )
-
-    if st.button("Back"): prev_step()
-    if st.button("Next"): next_step()
-
-# ------------- STEP 4 -------------
-
-elif data.step==4:
-
-    data.medications = st.radio("Medication use",["No","Yes"], horizontal=True)
-
-    if data.medications=="Yes":
-        n=st.text_input("Medication")
-        d=st.text_input("Dosage")
-        f=st.text_input("Frequency")
-
-        if st.button("Add drug") and n and d and f:
-            data.med_list.append({"name":n,"dosage":d,"frequency":f})
-
-        for m in data.med_list:
-            st.write(f"• {m['name']} — {m['dosage']} — {m['frequency']}")
-
-    if st.button("Back"): prev_step()
-    if st.button("Next"): next_step()
-
-# ------------- STEP 5 -------------
-
-elif data.step==5:
-
-    mob_map={
-        "Walks independently":1,
-        "Occasional supervision":2,
-        "Uses assist device":3,
-        "Hands-on assist":4,
-        "Non mobile":5
-        }
-
-    data.mobility_label = st.selectbox(
-        "Mobility",
-        mob_map.keys()
-    )
-    data.mobility = mob_map[data.mobility_label]
-
-    data.adult_present = st.radio("Adult present?",["No","Yes"], horizontal=True)
-
-    if data.adult_present=="Yes":
-        data.adult1=st.text_input("Adult 1 name")
-        data.rel1=st.text_input("Relationship")
-
-    data.notes=st.text_area("Notes")
-
-    if st.button("Back"): prev_step()
-    if st.button("Next"): next_step()
-
-# ------------- STEP 6 -------------
-
-elif data.step==6:
-
-    age=int(data.age)
-    weight=float(data.weight)
-    height=int(data.height_feet)*12+int(data.height_inches)
-
-    score = age*0.2 + weight*0.05 + height*0.05 + data.mobility*5
-
-    if data.seizures=="Yes": score+=10
-    if data.medications=="Yes": score+=10
-    if data.adult_present=="Yes": score-=5
-
-    level = "Low Risk" if score<=45 else "Medium Risk" if score<=70 else "High Risk"
-
-    st.metric("Risk Score", round(score,1))
-    st.subheader(level)
-
-    if st.button("SUBMIT & GENERATE PDF"):
-        final = build_final_pdf(data, score, level)
-        st.success("PDF Saved Successfully")
-        st.code(str(final))
-
-    if st.button("Back"): prev_step()
-    if st.button("Start Over"): reset()
+    pdf.set_font("Helvetica", "B", 16)
+    pdf.cell(0, 15, "Home Care Risk Assessment - Full Report", ln=True, align="C")
+    pdf.ln(10)
+
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.cell(0, 10, f"Client: {data['first_name']} {data['last_name']}", ln=True)
+    pdf.cell(0, 10, f"Submitted: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}", ln=True)
+    pdf.cell(0, 10, f"Risk Level: {level} (Score: {score:.1f})", ln=True)
+    pdf.ln(8)
+
+    pdf.set_font("Helvetica", "B", 13)
+    pdf.cell(0, 10, "Assessment Summary", ln=True)
+    pdf.set_font("Helvetica", "", 11)
+    details = [
+        f"Age: {data['age']} | Weight: {data['weight']} lbs | Height: {data['height_ft']}'{data['height_in']}\"",
+        f"Seizures: {data['seizures']}" + (f" ({data['seizure_type']})" if data['seizures']=='Yes' else ""),
+        f"Mobility: {data['mobility_label']}",
+        f"Adult Supervision: {data['adult_present']}",
+        f"Notes: {data['notes'] or 'None'}"
+    ]
+    for d in details:
+        pdf.multi_cell(0, 8, safe_text("• " + d))
+    pdf.ln(10)
+
+    pdf.set_font("Helvetica", "B", 13)
+    pdf.cell(0, 10, "AI Document Analysis", ln=True)
+    pdf.set_font("Helvetica", "", 11)
+    analysis_text = ai_analysis or "No documents uploaded or analysis unavailable."
+    pdf.multi_cell(0, 8, safe_text(analysis_text))
+    pdf.ln(10)
+
+    if file_names:
+        pdf.set_font("Helvetica", "I", 10)
+        pdf.cell(0, 8, f"Attached Documents: {', '.join(file_names)}", ln=True)
+
+    buffer = BytesIO()
+    pdf.output(buffer)
+    buffer.seek(0)
+    return buffer
+
+# ===============================
+# AI ANALYSIS (Placeholder - Replace with real Grok/OpenAI call)
+# ===============================
+def analyze_pdfs_with_ai(uploaded_files):
+    if not uploaded_files:
+        return "No supporting documents were uploaded."
+    
+    text_content = ""
+    for file in uploaded_files:
+        if file.type == "application/pdf":
+            # In real app: extract text using PyPDF2 or pdfplumber
+            text_content += f"\n\n--- Content from {file.name} ---\n[Text extraction placeholder]\n"
+        else:
+            text_content += f"\n\n--- {file.name} ---\n[Non-PDF file uploaded]"
+
+    # This is where you'd call Grok, OpenAI, Anthropic, etc.
+    prompt = f"""
+    You are a medical care assessor. Analyze the following patient information and uploaded documents.
+    Summarize key risks, medication concerns, mobility issues, and recommendations for home care safety.
+
+    Client: {st.session_state.first_name} {st.session_state.last_name}
+    Assessment Data: {st.session_state.__dict__}
+    
+    Uploaded Documents:
+    {text_content}
+
+    Provide a clear, professional 4–6 paragraph summary with actionable recommendations.
+    """
+
+    # Placeholder response (replace with actual API call)
+    return """
+    The client presents with moderate fall risk due to reported mobility challenges requiring hands-on assistance. 
+    History of tonic-clonic seizures increases risk significantly during unsupervised periods. 
+    Current medication regimen includes anti-seizure medication, which appears appropriately documented.
+
+    The uploaded medical summary confirms seizure diagnosis from 2022 and recent neurology follow-up. 
+    Care plan indicates need for 24/7 supervision during high-risk activities (bathing, stairs).
+
+    Recommendations:
+    • Install grab bars in bathroom and bedroom
+    • Use bed/chair alarms during nighttime
+    • Ensure rescue medication (e.g., Diastat) is accessible
+    • Schedule physical therapy evaluation for gait training
+    • Consider medical alert bracelet
+
+    Overall Risk Level: Medium-High. Close monitoring and environmental modifications strongly recommended.
+    """
+
+# ===============================
+# PAGES
+# ===============================
+def home_page():
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.title("Home Care Comfort Portal")
+    st.markdown("### Professional Risk Assessment & Care Coordination")
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Start New Assessment", use_container_width=True):
+            st.session_state.page = "assessment"
+            st.session_state.step = 1
+            st.rerun()
+    with col2:
+        if st.button("View Admin Dashboard", use_container_width=True):
+            st.session_state.page = "admin"
+            st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
+
+def assessment_page():
+    st.markdown(f'<div class="card">', unsafe_allow_html=True)
+    st.markdown('<div class="step-indicator">Step {st.session_state.step} of 3</div>', unsafe_allow_html=True)
+    st.title("Home Care Risk Assessment")
+
+    if st.session_state.step == 1:
+        with st.form("step1_form"):
+            st.subheader("Client Information")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.session_state.first_name = st.text_input("First Name*", st.session_state.first_name)
+                st.session_state.last_name = st.text_input("Last Name*", st.session_state.last_name)
+                st.session_state.dob = st.date_input("Date of Birth*", st.session_state.dob)
+            with col2:
+                st.session_state.age = st.text_input("Age*", st.session_state.age)
+                st.session_state.weight = st.text_input("Weight (lbs)*", st.session_state.weight)
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.session_state.height_ft = st.text_input("Height (ft)*", st.session_state.height_ft)
+                with c2:
+                    st.session_state.height_in = st.text_input("Height (in)*", st.session_state.height_in)
+
+            submitted = st.form_submit_button("Next →")
+            if submitted:
+                if not all([st.session_state.first_name, st.session_state.last_name, st.session_state.age]):
+                    st.error("Please fill all required fields.")
+                else:
+                    st.session_state.step = 2
+                    st.rerun()
+
+    elif st.session_state.step == 2:
+        with st.form("step2_form"):
+            st.subheader("Clinical & Safety Profile")
+            st.session_state.seizures = st.radio("History of Seizures?", ["No", "Yes"], horizontal=True)
+            if st.session_state.seizures == "Yes":
+                st.session_state.seizure_type = st.selectbox("Seizure Type", 
+                    ["Tonic-clonic", "Atonic", "Tonic", "Myoclonic", "Focal", "Absence"])
+
+            st.session_state.medications = st.radio("Takes Regular Medications?", ["No", "Yes"], horizontal=True)
+
+            mobility_options = ["Walks independently", "Needs supervision", "Uses aid", "Hands-on assist", "Non-mobile"]
+            st.session_state.mobility_label = st.selectbox("Mobility Level", mobility_options)
+            st.session_state.adult_present = st.radio("Adult Supervision Available?", ["No", "Yes"], horizontal=True)
+
+            st.session_state.notes = st.text_area("Additional Notes or Concerns")
+
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.form_submit_button("← Back"):
+                    st.session_state.step = 1
+                    st.rerun()
+            with col2:
+                if st.form_submit_button("Next →"):
+                    st.session_state.step = 3
+                    st.rerun()
+
+    elif st.session_state.step == 3:
+        st.subheader("Upload Supporting Documents")
+        st.info("Optional: Upload medical records, care plans, or physician notes for AI review.")
+        
+        uploaded = st.file_uploader("Drag & drop PDF files (max 2)", 
+                                  type=["pdf"], accept_multiple_files=True, 
+                                  help="These will be analyzed by AI and included in the final report")
+        
+        if uploaded:
+            st.session_state.uploaded_files = uploaded
+            names = [f.name for f in uploaded]
+            st.success(f"Uploaded: {', '.join(names)}")
+
+        # Calculate score
+        try:
+            age = int(st.session_state.age or 0)
+            weight = float(st.session_state.weight or 0)
+            height = (int(st.session_state.height_ft or 0)*12) + int(st.session_state.height_in or 0)
+            mobility_score = ["Walks independently", "Needs supervision", "Uses aid", "Hands-on assist", "Non-mobile"].index(st.session_state.mobility_label) + 1
+            score = age*0.2 + weight*0.05 + height*0.05 + mobility_score*12
+            if st.session_state.seizures == "Yes": score += 25
+            if st.session_state.medications == "Yes": score += 10
+            if st.session_state.adult_present == "No": score += 15
+
+            level = "Low" if score < 50 else "Medium" if score < 80 else "High"
+        except:
+            score, level = 0, "Unknown"
+
+        st.markdown(f"### Final Risk Level: <span class='badge {level.lower()}'>{level}</span>", unsafe_allow_html=True)
+
+        if st.button("Generate AI Analysis & Submit to Admin", type="primary", use_container_width=True):
+            with st.spinner("Analyzing documents with AI..."):
+                ai_text = analyze_pdfs_with_ai(st.session_state.uploaded_files)
+                st.session_state.ai_analysis = ai_text
+
+                file_names = [f.name for f in st.session_state.uploaded_files] if st.session_state.uploaded_files else []
+
+                final_pdf = create_combined_pdf(st.session_state, score, level, ai_text, file_names)
+
+                st.session_state.assessments.append({
+                    "name": f"{st.session_state.first_name} {st.session_state.last_name}",
+                    "date": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                    "score": f"{score:.1f}",
+                    "level": level,
+                    "pdf": final_pdf,
+                    "ai_analysis": ai_text
+                })
+
+            st.success("Assessment completed and sent to Admin!")
+            st.balloons()
+            if st.button("Go to Admin Dashboard"):
+                st.session_state.page = "admin"
+                st.rerun()
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+def admin_page():
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.title("Admin Dashboard")
+    st.markdown("### Completed Assessments")
+
+    if not st.session_state.assessments:
+        st.info("No assessments submitted yet.")
+    else:
+        for i, a in enumerate(st.session_state.assessments):
+            with st.expander(f"{a['name']} — {a['date']} — {a['level']} Risk ({a['score']})"):
+                st.write(f"**AI Summary:** {a['ai_analysis'][:300]}...")
+                st.download_button(
+                    label="Download Full AI-Analyzed Report (PDF)",
+                    data=a["pdf"],
+                    file_name=f"{a['name'].replace(' ', '_')}_Full_Report.pdf",
+                    mime="application/pdf",
+                    key=f"dl_{i}"
+                )
+    if st.button("← Back to Home"):
+        st.session_state.page = "home"
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# ===============================
+# ROUTER
+# ===============================
+if st.session_state.page == "home":
+    home_page()
+elif st.session_state.page == "assessment":
+    assessment_page()
+elif st.session_state.page == "admin":
+    admin_page()
