@@ -1,5 +1,4 @@
 import streamlit as st
-from datetime import datetime
 
 # Page Config
 st.set_page_config(
@@ -57,7 +56,9 @@ if "data" not in st.session_state:
         "diagnoses": "No", "diagnoses_details": "",
         "seizures": "No", "seizure_details": "",
         "medications": "No", "medication_details": "",
-        "assist_medical": "No"
+        "assist_medical": "No",
+        "behavior_mood": "Stable", "behavior_sleep": "Good", "behavior_social": "Active", "behavior_mental": "No",
+        "behavior_mental_details": "", "behavior_daily": "Independent"
     }
 if "assessments" not in st.session_state:
     st.session_state.assessments = []
@@ -95,14 +96,14 @@ def home():
 # ASSESSMENT
 def assessment():
     st.markdown('<div class="assessment-card">', unsafe_allow_html=True)
-    st.markdown("<h2 style='text-align:center; color:#2c3e50;'>Client Risk Assessment</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align:center; color:#636e72; margin-bottom:2rem;'>Please complete all three steps</p>", unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align:center; color:#2c3e50;'>Client Medical & Behavioral Assessment</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align:center; color:#636e72; margin-bottom:2rem;'>Please complete all four steps for a comprehensive evaluation</p>", unsafe_allow_html=True)
     
-    progress = {"1": 0.33, "2": 0.66, "3": 1.0}
+    progress = {"1": 0.25, "2": 0.5, "3": 0.75, "4": 1.0}
     st.progress(progress[str(st.session_state.step)])
 
     if st.session_state.step == 1:
-        st.markdown("<div class='step-header'>Step 1 of 3 • Client Identification</div>", unsafe_allow_html=True)
+        st.markdown("<div class='step-header'>Step 1 of 4 • Client Identification</div>", unsafe_allow_html=True)
         with st.form("step1"):
             data["first_name"] = st.text_input("First Name*", value=data["first_name"])
             data["last_name"] = st.text_input("Last Name*", value=data["last_name"])
@@ -115,7 +116,7 @@ def assessment():
                     st.error("Please fill in all required fields")
 
     elif st.session_state.step == 2:
-        st.markdown("<div class='step-header'>Step 2 of 3 • Physical Profile</div>", unsafe_allow_html=True)
+        st.markdown("<div class='step-header'>Step 2 of 4 • Physical Profile</div>", unsafe_allow_html=True)
         with st.form("step2"):
             data["age"] = st.text_input("Age*", value=data["age"], placeholder="e.g. 74")
             col1, col2 = st.columns(2)
@@ -138,7 +139,7 @@ def assessment():
                         st.error("Please complete all fields")
 
     elif st.session_state.step == 3:
-        st.markdown("<div class='step-header'>Step 3 of 3 • Medical Profile</div>", unsafe_allow_html=True)
+        st.markdown("<div class='step-header'>Step 3 of 4 • Medical Profile</div>", unsafe_allow_html=True)
         with st.form("step3"):
             st.markdown("#### Medical History", unsafe_allow_html=True)
             
@@ -177,12 +178,35 @@ def assessment():
                     st.session_state.step = 2
                     st.rerun()
             with cols:
+                if st.form_submit_button("Next →", use_container_width=True):
+                    st.session_state.step = 4
+                    st.rerun()
+
+    elif st.session_state.step == 4:
+        st.markdown("<div class='step-header'>Step 4 of 4 • Behavioral Profile</div>", unsafe_allow_html=True)
+        with st.form("step4"):
+            st.markdown("#### Behavioral History", unsafe_allow_html=True)
+
+            data["behavior_mood"] = st.selectbox("Mood stability in the last month?", ["Stable", "Occasional fluctuations", "Frequent fluctuations"])
+            data["behavior_sleep"] = st.selectbox("Sleep quality?", ["Good (7-9 hours/night)", "Fair (5-7 hours/night)", "Poor (<5 hours/night)"])
+            data["behavior_social"] = st.selectbox("Social interactions?", ["Active and positive", "Limited", "Isolated"])
+            data["behavior_daily"] = st.selectbox("Ability to perform daily activities?", ["Independent", "Needs some assistance", "Needs full assistance"])
+            data["behavior_mental"] = st.radio("Any mental health history?", ["No", "Yes"], horizontal=True)
+            if data["behavior_mental"] == "Yes":
+                data["behavior_mental_details"] = st.text_area("Please describe mental health history", value=data["behavior_mental_details"], height=120, key="behavior_mental_details")
+
+            colb, cols = st.columns(2)
+            with colb:
+                if st.form_submit_button("← Back"):
+                    st.session_state.step = 3
+                    st.rerun()
+            with cols:
                 if st.form_submit_button("Submit Assessment", type="primary", use_container_width=True):
                     st.session_state.assessments.append(data.copy())
                     # Reset data
                     for key in data:
                         data[key] = ""
-                    data.update({"diagnoses":"No","seizures":"No","medications":"No","assist_medical":"No"})
+                    data.update({"diagnoses":"No","seizures":"No","medications":"No","assist_medical":"No","behavior_mood":"Stable","behavior_sleep":"Good","behavior_social":"Active","behavior_mental":"No","behavior_daily":"Independent"})
                     st.session_state.step = 1
                     st.session_state.page = "admin"
                     st.rerun()
@@ -200,7 +224,7 @@ def admin():
     else:
         for i, ass in enumerate(reversed(st.session_state.assessments)):
             name = f"{ass['first_name']} {ass['last_name']}"
-            # Calculate risk score
+            # Calculate risk score with breakdown
             try:
                 age = int(ass['age'] or 0)
                 weight = float(ass['weight'] or 0)
@@ -210,14 +234,26 @@ def admin():
                     height_ft = int(parts[0]) if parts[0] else 0
                     height_in = int(parts[1]) if len(parts) > 1 else 0
                 height = height_ft*12 + height_in
-                score = age * 0.2 + weight * 0.05 + height * 0.05
-                if ass['diagnoses'] == "Yes": score += 10
-                if ass['seizures'] == "Yes": score += 25
-                if ass['medications'] == "Yes": score += 10
-                if ass['assist_medical'] == "Yes": score += 15
+                score = 0
+                breakdown = []
+                score += age * 0.2; breakdown.append(f"Age ({age}): +{age * 0.2:.1f}")
+                score += weight * 0.05; breakdown.append(f"Weight ({weight} lbs): +{weight * 0.05:.1f}")
+                score += height * 0.05; breakdown.append(f"Height ({height} in): +{height * 0.05:.1f}")
+                if ass['diagnoses'] == "Yes": score += 10; breakdown.append("Diagnoses: +10")
+                if ass['seizures'] == "Yes": score += 25; breakdown.append("Seizures: +25")
+                if ass['medications'] == "Yes": score += 10; breakdown.append("Medications: +10")
+                if ass['assist_medical'] == "Yes": score += 15; breakdown.append("Medical Assist: +15")
+                behavior_score = 0
+                if ass['behavior_mood'] != "Stable": behavior_score += 10; breakdown.append("Mood: +10")
+                if ass['behavior_sleep'] != "Good": behavior_score += 10; breakdown.append("Sleep: +10")
+                if ass['behavior_social'] != "Active": behavior_score += 10; breakdown.append("Social: +10")
+                if ass['behavior_daily'] != "Independent": behavior_score += 15; breakdown.append("Daily Activities: +15")
+                if ass['behavior_mental'] == "Yes": behavior_score += 20; breakdown.append("Mental Health History: +20")
+                score += behavior_score
                 level = "Low" if score < 50 else "Medium" if score < 80 else "High"
             except:
                 score, level = 0, "Unknown"
+                breakdown = ["Error in calculation"]
             badge_class = level.lower()
             expander_title = f"{name} • Client ID: {ass['client_id']} • Risk: <span class='badge {badge_class}'>{level}</span> (Score: {score:.1f})"
             with st.expander(expander_title, expanded=True):
@@ -232,6 +268,17 @@ def admin():
                 if ass['medications'] == "Yes" and ass['medication_details']:
                     st.write("→ " + ass['medication_details'])
                 st.write(f"**Assist with Medical Needs:** {ass['assist_medical']}")
+                st.write(f"**Mood Stability:** {ass['behavior_mood']}")
+                st.write(f"**Sleep Quality:** {ass['behavior_sleep']}")
+                st.write(f"**Social Interactions:** {ass['behavior_social']}")
+                st.write(f"**Daily Activities:** {ass['behavior_daily']}")
+                st.write(f"**Mental Health History:** {ass['behavior_mental']}")
+                if ass['behavior_mental'] == "Yes" and ass['behavior_mental_details']:
+                    st.write("→ " + ass['behavior_mental_details'])
+                st.markdown("### Risk Score Breakdown")
+                for item in breakdown:
+                    st.write("• " + item)
+                st.write(f"**Total Score:** {score:.1f} ({level} Risk)")
 
     if st.button("← Back to Home"):
         st.session_state.page = "home"
