@@ -148,7 +148,7 @@ def assessment():
             if data["diagnoses"] == "Yes":
                 with col2:
                     st.markdown('<div class="detail-box">', unsafe_allow_html=True)
-                    data["diagnoses_details"] = st.text_area("Details", value=data["diagnoses_details"], height=80, label_visibility="collapsed")
+                    data["diagnoses_details"] = st.text_area("Details", value=data["diagnoses_details"], height=80, label_visibility="collapsed", key="diagnoses_details")
                     st.markdown('</div>', unsafe_allow_html=True)
 
             col1, col2 = st.columns([3,2])
@@ -157,7 +157,7 @@ def assessment():
             if data["seizures"] == "Yes":
                 with col2:
                     st.markdown('<div class="detail-box">', unsafe_allow_html=True)
-                    data["seizure_details"] = st.text_area("Details", value=data["seizure_details"], height=80, label_visibility="collapsed")
+                    data["seizure_details"] = st.text_area("Details", value=data["seizure_details"], height=80, label_visibility="collapsed", key="seizure_details")
                     st.markdown('</div>', unsafe_allow_html=True)
 
             col1, col2 = st.columns([3,2])
@@ -166,7 +166,7 @@ def assessment():
             if data["medications"] == "Yes":
                 with col2:
                     st.markdown('<div class="detail-box">', unsafe_allow_html=True)
-                    data["medication_details"] = st.text_area("Details", value=data["medication_details"], height=80, label_visibility="collapsed")
+                    data["medication_details"] = st.text_area("Details", value=data["medication_details"], height=80, label_visibility="collapsed", key="medication_details")
                     st.markdown('</div>', unsafe_allow_html=True)
 
             data["assist_medical"] = st.radio("Will provider be expected to assist with any medical needs?", ["No", "Yes"], horizontal=True)
