@@ -101,7 +101,7 @@ def assessment():
     progress = {"1": 0.33, "2": 0.66, "3": 1.0}
     st.progress(progress[str(st.session_state.step)])
 
-    if st.session_state.step = 1:
+    if st.session_state.step == 1:
         st.markdown("<div class='step-header'>Step 1 of 3 • Client Identification</div>", unsafe_allow_html=True)
         with st.form("step1"):
             data["first_name"] = st.text_input("First Name*", value=data["first_name"])
@@ -206,12 +206,15 @@ def admin():
                 weight = float(ass['weight'] or 0)
                 height_ft, height_in = 0, 0
                 if "'" in ass['height']:
-                    height_ft, height_in = map(int, ass['height'].replace('"', '').split("'"))
+                    parts = ass['height'].replace('"', '').split("'")
+                    height_ft = int(parts[0]) if parts[0] else 0
+                    height_in = int(parts[1]) if len(parts) > 1 else 0
                 height = height_ft*12 + height_in
                 score = age * 0.2 + weight * 0.05 + height * 0.05
+                if ass['diagnoses'] == "Yes": score += 10
                 if ass['seizures'] == "Yes": score += 25
                 if ass['medications'] == "Yes": score += 10
-                if ass['assist_medical'] == "No": score += 15
+                if ass['assist_medical'] == "Yes": score += 15
                 level = "Low" if score < 50 else "Medium" if score < 80 else "High"
             except:
                 score, level = 0, "Unknown"
