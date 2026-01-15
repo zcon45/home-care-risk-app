@@ -1,13 +1,7 @@
 import streamlit as st
 from datetime import datetime
-from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER, TA_LEFT
-import io
 import json
+import io
 
 # Page Config
 st.set_page_config(
@@ -49,6 +43,17 @@ st.markdown("""
         border-left: 4px solid #4facfe; margin: 1rem 0;
     }
     .footer-text {margin-top: 3rem; color: #bdc3c7; font-size: 0.95rem;}
+    .pdf-section {
+        background: #f8f9fc; padding: 1.5rem; border-radius: 10px;
+        border: 2px solid #e0e0e0; margin: 1.5rem 0;
+    }
+    .pdf-header {
+        font-size: 1.8rem; color: #2c3e50; font-weight: bold;
+        text-align: center; margin-bottom: 1rem;
+    }
+    .pdf-label {
+        font-weight: bold; color: #4facfe; margin-top: 0.8rem;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -80,17 +85,17 @@ def calculate_risk_score(assessment):
     try:
         # Age factor (0-20 points)
         age = int(assessment.get('age', 0))
-        if age > 75:
+        if age > 85:
+            score += 25
+            risk_factors.append("Very advanced age (>85)")
+        elif age > 75:
             score += 20
             risk_factors.append("Advanced age (>75)")
         elif age > 65:
             score += 10
             risk_factors.append("Senior age (65-75)")
-        elif age > 85:
-            score += 25
-            risk_factors.append("Very advanced age (>85)")
         
-        # Seizure assessment (0-40 points) - WEIGHTED HEAVILY
+        # Seizure assessment (0-55 points) - WEIGHTED HEAVILY
         if assessment.get('seizures') == "Yes":
             seizure_freq = assessment.get('seizure_frequency', '').lower()
             seizure_severity = assessment.get('seizure_severity', '').lower()
@@ -163,149 +168,91 @@ def calculate_risk_score(assessment):
     
     return score, level, risk_factors
 
-# PDF Generation Function
-def generate_pdf(assessment):
-    """Generate a professional PDF report"""
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.5*inch, bottomMargin=0.5*inch)
-    story = []
-    styles = getSampleStyleSheet()
-    
-    # Custom styles
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading1'],
-        fontSize=24,
-        textColor=colors.HexColor('#2c3e50'),
-        spaceAfter=12,
-        alignment=TA_CENTER
-    )
-    
-    heading_style = ParagraphStyle(
-        'CustomHeading',
-        parent=styles['Heading2'],
-        fontSize=14,
-        textColor=colors.HexColor('#4facfe'),
-        spaceAfter=8,
-        spaceBefore=12
-    )
-    
-    # Calculate risk
+# Generate Text-Based PDF-Style Report
+def generate_text_report(assessment):
+    """Generate a formatted text report that can be saved as PDF"""
     score, level, risk_factors = calculate_risk_score(assessment)
     
-    # Title
-    story.append(Paragraph("Home Care Risk Assessment Report", title_style))
-    story.append(Spacer(1, 0.3*inch))
+    report = f"""
+═══════════════════════════════════════════════════════════════
+          HOME CARE RISK ASSESSMENT REPORT
+═══════════════════════════════════════════════════════════════
+
+CLIENT INFORMATION
+─────────────────────────────────────────────────────────────
+Name:               {assessment['first_name']} {assessment['last_name']}
+Client ID:          {assessment['client_id']}
+Age:                {assessment['age']} years
+Height:             {assessment['height']}
+Weight:             {assessment['weight']} lbs
+Assessment Date:    {assessment.get('timestamp', 'N/A')}
+
+
+RISK ASSESSMENT SCORE
+─────────────────────────────────────────────────────────────
+Risk Score:         {score:.0f} points
+Risk Level:         {level.upper()}
+
+
+IDENTIFIED RISK FACTORS
+─────────────────────────────────────────────────────────────
+"""
     
-    # Client Information
-    story.append(Paragraph("Client Information", heading_style))
-    client_data = [
-        ["Name:", f"{assessment['first_name']} {assessment['last_name']}"],
-        ["Client ID:", assessment['client_id']],
-        ["Age:", assessment['age']],
-        ["Height:", assessment['height']],
-        ["Weight:", f"{assessment['weight']} lbs"],
-        ["Assessment Date:", assessment.get('timestamp', 'N/A')]
-    ]
-    
-    client_table = Table(client_data, colWidths=[2*inch, 4*inch])
-    client_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#f8f9fc')),
-        ('TEXTCOLOR', (0, 0), (-1, -1), colors.HexColor('#2c3e50')),
-        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 10),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-        ('TOPPADDING', (0, 0), (-1, -1), 8),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey)
-    ]))
-    story.append(client_table)
-    story.append(Spacer(1, 0.3*inch))
-    
-    # Risk Assessment Score
-    story.append(Paragraph("Risk Assessment Score", heading_style))
-    
-    risk_color = {
-        "Low": colors.HexColor('#10b981'),
-        "Moderate": colors.HexColor('#f59e0b'),
-        "High": colors.HexColor('#ef4444'),
-        "Critical": colors.HexColor('#991b1b')
-    }
-    
-    risk_data = [
-        ["Risk Score:", f"{score:.0f}"],
-        ["Risk Level:", level]
-    ]
-    
-    risk_table = Table(risk_data, colWidths=[2*inch, 4*inch])
-    risk_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#f8f9fc')),
-        ('BACKGROUND', (1, 1), (1, 1), risk_color.get(level, colors.grey)),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#2c3e50')),
-        ('TEXTCOLOR', (1, 1), (1, 1), colors.white),
-        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-        ('FONTNAME', (1, 1), (1, 1), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 11),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
-        ('TOPPADDING', (0, 0), (-1, -1), 10),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey)
-    ]))
-    story.append(risk_table)
-    story.append(Spacer(1, 0.2*inch))
-    
-    # Risk Factors
     if risk_factors:
-        story.append(Paragraph("Identified Risk Factors", heading_style))
         for factor in risk_factors:
-            story.append(Paragraph(f"• {factor}", styles['Normal']))
-        story.append(Spacer(1, 0.2*inch))
+            report += f"• {factor}\n"
+    else:
+        report += "• No significant risk factors identified\n"
     
-    # Medical Details
-    story.append(Paragraph("Medical Information", heading_style))
+    report += """
+
+MEDICAL INFORMATION
+─────────────────────────────────────────────────────────────
+"""
     
-    medical_details = []
+    # Medical Diagnoses
+    report += f"\nMedical Diagnoses:  {assessment['diagnoses']}\n"
+    if assessment['diagnoses'] == "Yes" and assessment['diagnoses_details']:
+        report += f"Details: {assessment['diagnoses_details']}\n"
     
-    if assessment['diagnoses'] == "Yes":
-        medical_details.append(["Medical Diagnoses:", "Yes"])
-        if assessment['diagnoses_details']:
-            medical_details.append(["Details:", assessment['diagnoses_details']])
-    
+    # Seizure Information
+    report += f"\nSeizure History:    {assessment['seizures']}\n"
     if assessment['seizures'] == "Yes":
-        medical_details.append(["Seizure History:", "Yes"])
         if assessment.get('seizure_frequency'):
-            medical_details.append(["Frequency:", assessment['seizure_frequency']])
+            report += f"Frequency: {assessment['seizure_frequency']}\n"
         if assessment.get('seizure_severity'):
-            medical_details.append(["Severity:", assessment['seizure_severity']])
+            report += f"Severity: {assessment['seizure_severity']}\n"
+        if assessment.get('seizure_type'):
+            report += f"Additional Details: {assessment['seizure_type']}\n"
     
-    if assessment['medications'] == "Yes":
-        medical_details.append(["Current Medications:", "Yes"])
-        if assessment['medication_details']:
-            medical_details.append(["Details:", assessment['medication_details']])
+    # Medications
+    report += f"\nCurrent Medications: {assessment['medications']}\n"
+    if assessment['medications'] == "Yes" and assessment['medication_details']:
+        report += f"Details: {assessment['medication_details']}\n"
     
-    medical_details.append(["Requires Medical Assistance:", assessment['assist_medical']])
+    # Medical Assistance
+    report += f"\nRequires Medical Assistance: {assessment['assist_medical']}\n"
     
+    # Additional Notes
     if assessment.get('additional_notes'):
-        medical_details.append(["Additional Notes:", assessment['additional_notes']])
+        report += f"\nAdditional Notes:\n{assessment['additional_notes']}\n"
     
-    medical_table = Table(medical_details, colWidths=[2*inch, 4*inch])
-    medical_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#f8f9fc')),
-        ('TEXTCOLOR', (0, 0), (-1, -1), colors.HexColor('#2c3e50')),
-        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 10),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-        ('TOPPADDING', (0, 0), (-1, -1), 8),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey)
-    ]))
-    story.append(medical_table)
+    report += """
+─────────────────────────────────────────────────────────────
+
+RISK LEVEL GUIDELINES:
+• Low (0-34):       Standard care protocols apply
+• Moderate (35-59): Enhanced monitoring recommended
+• High (60-79):     Specialized care required
+• Critical (80+):   Immediate intervention protocols
+
+═══════════════════════════════════════════════════════════════
+Report generated by Home Care Risk Assessment System
+Confidential - HIPAA Protected Information
+═══════════════════════════════════════════════════════════════
+"""
     
-    # Build PDF
-    doc.build(story)
-    buffer.seek(0)
-    return buffer
+    return report
 
 # HOME PAGE
 def home():
@@ -582,16 +529,65 @@ def admin():
                 if assessment.get('additional_notes'):
                     st.markdown(f"**Additional Notes:** _{assessment['additional_notes']}_")
                 
-                # Download PDF button
+                # Download options
                 st.divider()
-                pdf_buffer = generate_pdf(assessment)
-                st.download_button(
-                    label="📄 Download PDF Report",
-                    data=pdf_buffer,
-                    file_name=f"Risk_Assessment_{assessment['client_id']}_{assessment['last_name']}.pdf",
-                    mime="application/pdf",
-                    use_container_width=True
-                )
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    # Text report (can be saved as PDF)
+                    text_report = generate_text_report(assessment)
+                    st.download_button(
+                        label="📄 Download PDF Report",
+                        data=text_report,
+                        file_name=f"Risk_Assessment_{assessment['client_id']}_{assessment['last_name']}.txt",
+                        mime="text/plain",
+                        use_container_width=True,
+                        help="Download as text file - can be printed or saved as PDF"
+                    )
+                
+                with col2:
+                    # JSON data export
+                    json_data = json.dumps(assessment, indent=2)
+                    st.download_button(
+                        label="💾 Download JSON Data",
+                        data=json_data,
+                        file_name=f"Assessment_Data_{assessment['client_id']}.json",
+                        mime="application/json",
+                        use_container_width=True
+                    )
+    
+    st.divider()
+    
+    # Export all assessments
+    if st.session_state.assessments:
+        st.markdown("### 📦 Export All Data")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Export all as JSON
+            all_data = json.dumps(st.session_state.assessments, indent=2)
+            st.download_button(
+                label="📥 Export All (JSON)",
+                data=all_data,
+                file_name=f"All_Assessments_{datetime.now().strftime('%Y%m%d')}.json",
+                mime="application/json",
+                use_container_width=True
+            )
+        
+        with col2:
+            # CSV-like format
+            csv_data = "Client ID,Name,Age,Risk Level,Risk Score,Timestamp\n"
+            for a in st.session_state.assessments:
+                score, level, _ = calculate_risk_score(a)
+                csv_data += f"{a['client_id']},{a['first_name']} {a['last_name']},{a['age']},{level},{score:.0f},{a.get('timestamp', 'N/A')}\n"
+            
+            st.download_button(
+                label="📊 Export Summary (CSV)",
+                data=csv_data,
+                file_name=f"Assessment_Summary_{datetime.now().strftime('%Y%m%d')}.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
     
     st.divider()
     
@@ -608,7 +604,7 @@ def admin():
                 st.rerun()
             else:
                 st.session_state.confirm_clear = True
-                st.warning("Click again to confirm deletion")
+                st.warning("⚠️ Click again to confirm deletion")
     
     st.markdown('</div>', unsafe_allow_html=True)
 
